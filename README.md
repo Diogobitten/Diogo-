@@ -1,99 +1,117 @@
 <div align="center">
 
-  <img src="assets/brand/app_logo_wordmark.png" alt="NuvioTV" width="300" />
+  <img src="dplus1.png" alt="Diogo+" width="300" />
   <br />
   <br />
 
-  [![Contributors][contributors-shield]][contributors-url]
-  [![Forks][forks-shield]][forks-url]
-  [![Stargazers][stars-shield]][stars-url]
-  [![Issues][issues-shield]][issues-url]
   [![License][license-shield]][license-url]
 
   <p>
-    A modern Android TV media player powered by the Stremio addon ecosystem.
+    Um media player Android TV moderno, baseado no ecossistema de addons Stremio.
     <br />
-    Stremio Addon ecosystem • Android TV optimized • Playback-focused experience
+    Ecossistema Stremio • Otimizado para Android TV • Experiência focada em playback
   </p>
 
 </div>
 
-## About
+## Sobre
 
-NuvioTV is a modern media player designed specifically for Android TV.
+Diogo+ é um media player moderno projetado especificamente para Android TV.
 
-It acts as a client-side playback interface that can integrate with the Stremio addon ecosystem for content discovery and source resolution through user-installed extensions.
+Funciona como uma interface de reprodução client-side que integra com o ecossistema de addons Stremio para descoberta de conteúdo e resolução de streams através de extensões instaladas pelo usuário.
 
-Built with Kotlin and optimized for a TV-first viewing experience.
+Construído com Kotlin e Jetpack Compose, otimizado para uma experiência TV-first com navegação por controle remoto (D-pad).
 
-## Installation
+## Funcionalidades
 
-### Android TV
+- 🎬 Catálogos de mídia via addons Stremio (filmes, séries, anime)
+- 🏠 3 layouts de Home Screen: Classic, Grid e Modern
+- 📺 Streaming Services row com logos SVG (Netflix, Disney+, HBO MAX, etc.)
+- 📅 Tela de Calendário com grid mensal de lançamentos da biblioteca
+- 🆕 Row "Novidades" com episódios e filmes lançados hoje
+- 🎵 Theme songs automáticas na tela de detalhes (via ThemerrDB)
+- 🎥 Trailer ambiente em loop na tela de detalhes (mudo, crop-to-fill)
+- 🤖 Diobot AI Concierge — assistente de voz/texto via celular (OpenAI ChatGPT + TMDB em tempo real)
+- 👤 Perfis com avatares de múltiplas fontes (DiceBear, TMDB, Superhero API, Rick and Morty, Anime, Pokémon, Cartoon Network)
+- 🔐 Login via QR Code — servidor HTTP local, sem dependência de serviço externo
+- 📊 Integração Trakt.tv (scrobbling, biblioteca, discovery rows)
+- 🔍 Busca e descoberta de conteúdo
+- 📚 Biblioteca pessoal com progresso de assistência e "Continuar Assistindo"
+- 🔌 Sistema de plugins JavaScript local (QuickJS)
+- ⏭️ Detecção de intro/outro (AniSkip, AnimeSkip, IntroDB)
+- 🔄 Auto-updater via GitHub Releases
+- 🌐 Suporte a legendas incluindo ASS/SSA via libass
 
-Download the latest APK from [GitHub Releases](https://github.com/tapframe/NuvioTV/releases/latest) and install on your Android TV device.
+## Instalação
 
-## Development
+Baixe o APK mais recente em [GitHub Releases](https://github.com/Diogobitten/Diogo-/releases/latest) e instale no seu dispositivo Android TV.
 
-### Prerequisites
+## Desenvolvimento
 
-- Android Studio (latest version)
-- JDK 11+
-- Android SDK (API 29+)
-- Gradle 8.0+
+### Pré-requisitos
+
+- Java 17 (`brew install openjdk@17`)
+- Android SDK com `ANDROID_HOME` configurado
+- Android TV (físico ou emulador) para testes
 
 ### Setup
 
 ```bash
-git clone https://github.com/tapframe/NuvioTV.git
-cd NuvioTV
-./gradlew build
+git clone https://github.com/Diogobitten/Diogo-.git
+cd Diogo-
+cp local.example.properties local.properties
+# Preencha as chaves necessárias no local.properties
 ```
 
-### Running on Emulator or Device
+### Configuração
+
+Copie `local.example.properties` para `local.properties` e preencha as chaves:
+
+- `TMDB_API_KEY` — obrigatório para metadados e imagens
+- `SUPABASE_URL` / `SUPABASE_ANON_KEY` — opcional, para auth e sync na nuvem
+- `TRAKT_CLIENT_ID` / `TRAKT_CLIENT_SECRET` — opcional, para integração Trakt
+- `OPENAI_API_KEY` — opcional, para o Diobot AI Concierge
+
+### Build & Deploy
 
 ```bash
-# Debug build
+# Build debug APK
+./gradlew assembleDebug
+
+# Instalar no dispositivo conectado
 ./gradlew installDebug
 
-# Run on connected device
-adb shell am start -n com.nuvio.tv/.MainActivity
+# Conectar via ADB Wi-Fi (Android TV)
+adb connect <TV_IP>:5555
+
+# Rodar testes unitários
+./gradlew testDebugUnitTest
+
+# Build release
+./gradlew assembleRelease
 ```
 
-## Legal & DMCA
+## Tech Stack
 
-NuvioTV functions solely as a client-side interface for browsing metadata and playing media provided by user-installed extensions and/or user-provided sources. It is intended for content the user owns or is otherwise authorized to access.
+- Kotlin 2.3.0 + Jetpack Compose (BOM 2026.01.01)
+- TV Material + Material3
+- ExoPlayer/Media3 (fork local com decoders extras: FFmpeg, AV1, IAMF, MPEG-H)
+- Hilt (Dependency Injection)
+- Retrofit + Moshi (REST APIs)
+- Supabase SDK (Auth + Postgrest)
+- OkHttp com cache de 50MB
+- Coil 2.x (imagens com SVG support)
+- QuickJS-KT (plugins JavaScript)
+- DataStore Preferences (estado local)
 
-NuvioTV is not affiliated with any third-party extensions or content providers. It does not host, store, or distribute any media content.
+## Baseado em
 
-For comprehensive legal information, including our full disclaimer, third-party extension policy, and DMCA/Copyright information, please visit our **[Legal & Disclaimer Page](https://tapframe.github.io/NuvioTV/#legal)**.
+Fork do [NuvioTV](https://github.com/tapframe/NuvioTV) — um projeto open-source de media player para Android TV.
 
-## Built With
+## Licença
 
-* Kotlin
-* Jetpack Compose & TV Material3
-* ExoPlayer / Media3
-* Hilt (Dependency Injection)
-* Retrofit (Networking)
-* Gradle
+Distribuído sob a licença GPL-3.0. Veja [LICENSE](LICENSE) para mais informações.
 
-## Star History
-
-<a href="https://www.star-history.com/#tapframe/NuvioTV&type=date&legend=top-left">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=tapframe/NuvioTV&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=tapframe/NuvioTV&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=tapframe/NuvioTV&type=date&legend=top-left" />
- </picture>
-</a>
-
-<!-- MARKDOWN LINKS & IMAGES -->
-[contributors-shield]: https://img.shields.io/github/contributors/tapframe/NuvioTV.svg?style=for-the-badge
-[contributors-url]: https://github.com/tapframe/NuvioTV/graphs/contributors
-[forks-shield]: https://img.shields.io/github/forks/tapframe/NuvioTV.svg?style=for-the-badge
-[forks-url]: https://github.com/tapframe/NuvioTV/network/members
-[stars-shield]: https://img.shields.io/github/stars/tapframe/NuvioTV.svg?style=for-the-badge
-[stars-url]: https://github.com/tapframe/NuvioTV/stargazers
-[issues-shield]: https://img.shields.io/github/issues/tapframe/NuvioTV.svg?style=for-the-badge
-[issues-url]: https://github.com/tapframe/NuvioTV/issues
-[license-shield]: https://img.shields.io/github/license/tapframe/NuvioTV.svg?style=for-the-badge
+<!-- MARKDOWN LINKS -->
+[license-shield]: https://img.shields.io/github/license/Diogobitten/Diogo-.svg?style=for-the-badge
 [license-url]: http://www.gnu.org/licenses/gpl-3.0.en.html
