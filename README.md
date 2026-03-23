@@ -38,6 +38,7 @@ Built with Kotlin and Jetpack Compose, optimized for a TV-first experience with 
 - 💡 "Dica do Dia" Daily Tips — 3 curated movie picks refreshed daily from TMDB trends
 - 🎞️ "Lançamentos Recentes" — recently released movies from TMDB Now Playing
 - 🖼️ HD backdrop images — native resolution (1920x1080+) for sharp TV display
+- 💬 TMDB Reviews on detail screen — user reviews with ratings, avatars, and D-pad navigation
 - 👤 Profiles with avatars from multiple sources (DiceBear, TMDB, Superhero API, Rick and Morty, Anime, Pokémon, Cartoon Network)
 - 🔐 QR Code login — local HTTP server, no external service dependency
 - 📊 Trakt.tv integration (scrobbling, library, discovery rows)

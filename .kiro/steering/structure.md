@@ -348,3 +348,17 @@ com/nuvio/tv/
 - Applied across: `TmdbMetadataService` (recommendations, collection parts, cast credits), `TraktDiscoveryService`, `AiRecommendationService`, `DailyTipService`, `TmdbDiscoveryService`
 - Poster images remain at `w500` (sufficient for card thumbnails)
 - Calendar items use smaller sizes (`w500` for episode stills, `w780` for calendar card backdrops) as they display in compact UI
+
+## TMDB Reviews System
+- `TmdbMetadataService.fetchReviews()` fetches user reviews from TMDB API for both movies (`movie/{id}/reviews`) and TV shows (`tv/{id}/reviews`)
+- DTOs: `TmdbReviewsResponse`, `TmdbReviewResult`, `TmdbReviewAuthor` in `TmdbApi.kt`
+- Domain model: `TmdbReview` (`domain/model/TmdbReview.kt`) with `id`, `author`, `content`, `rating`, `avatarUrl`, `createdAt`
+- Avatar URLs from TMDB: handles both absolute URLs (`https://...`) and TMDB paths (`/path`) — prefixed with `https://image.tmdb.org/t/p/w185`
+- `MetaDetailsViewModel.loadReviewsAsync()` launched in parallel from `applyMetaWithEnrichment()` alongside other async loads
+- `MetaDetailsUiState.tmdbReviews: List<TmdbReview>` holds the fetched reviews
+- `ReviewsSection` composable: `LazyRow` of `ReviewCard`s (340×180dp) with TV Material `Card` component
+- Cards are D-pad focusable with scale animation (1.04f), white border on focus, and `focusRestorer` on the `LazyRow`
+- Card background: 80% transparent (`alpha = 0.2f`) for both normal and focused states
+- Each card shows: author avatar (28dp circle), author name, star rating (gold ★ x/10), date, and truncated review text (max 300 chars, 6 lines)
+- Section title: "Comentários" (localized in values, values-pt-rBR, values-pt-rPT)
+- Positioned in detail screen `LazyColumn` between cast/crew tabs and production companies

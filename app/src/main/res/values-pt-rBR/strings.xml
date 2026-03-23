@@ -117,6 +117,7 @@
     <string name="detail_tab_more_like_this">Títulos Semelhantes</string>
     <string name="detail_section_network">Rede</string>
     <string name="detail_section_production">Produção</string>
+    <string name="detail_section_reviews">Comentários</string>
     <string name="episodes_unavailable">Indisponível</string>
     <string name="detail_lists_fallback">Listas</string>
     <string name="detail_lists_subtitle">Em quais listas este título deve aparecer?</string>

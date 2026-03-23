@@ -381,6 +381,7 @@ fun MetaDetailsScreen(
                     episodeRatingsError = uiState.episodeRatingsError,
                     mdbListRatings = uiState.mdbListRatings,
                     showMdbListImdb = uiState.showMdbListImdb,
+                    tmdbReviews = uiState.tmdbReviews,
                     onSeasonSelected = { viewModel.onEvent(MetaDetailsEvent.OnSeasonSelected(it)) },
                     onEpisodeClick = { video ->
                         onPlayClick(
@@ -621,6 +622,7 @@ private fun MetaDetailsContent(
     episodeRatingsError: String?,
     mdbListRatings: MDBListRatings?,
     showMdbListImdb: Boolean,
+    tmdbReviews: List<com.nuvio.tv.domain.model.TmdbReview>,
     onSeasonSelected: (Int) -> Unit,
     onEpisodeClick: (Video) -> Unit,
     onEpisodeManualPlayClick: (Video) -> Unit,
@@ -1375,6 +1377,13 @@ private fun MetaDetailsContent(
                             }
                         }
                     }
+                }
+            }
+
+            // TMDB Reviews section
+            if (tmdbReviews.isNotEmpty()) {
+                item(key = "reviews", contentType = "reviews_section") {
+                    ReviewsSection(reviews = tmdbReviews)
                 }
             }
 

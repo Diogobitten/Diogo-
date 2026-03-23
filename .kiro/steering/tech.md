@@ -108,7 +108,7 @@
 - TMDB backdrop/background images use `original` size (native 1920x1080+) for sharp TV display; poster images use `w500`
 - `allowHardware(true)` on all image requests (detail backdrop, cast photos, episode thumbnails, company logos, hero logo, grid/content cards, new releases, continue watching)
 - Detail screen backdrop uses `crossfade(false)` for instant display on navigation (no fade-in delay)
-- `MetaDetailsViewModel.applyMetaWithEnrichment()` launches `loadMoreLikeThisAsync`, `loadMDBListRatings`, and `enrichMeta` all in parallel — MDBList ratings no longer wait for enrichment to complete
+- `MetaDetailsViewModel.applyMetaWithEnrichment()` launches `loadMoreLikeThisAsync`, `loadMDBListRatings`, `loadReviewsAsync`, and `enrichMeta` all in parallel — MDBList ratings and TMDB reviews no longer wait for enrichment to complete
 - Both `ClassicHomeContent` and `ModernHomeContent` use `LazyListPrefetchStrategy(nestedPrefetchItemCount = 5)` on their vertical `LazyColumn` to pre-compose cards in nested `LazyRow`s across multiple frames before rows scroll into view
 - D-pad key repeat throttling (120ms in Grid, 80ms in Classic and Modern) to prevent HWUI overload when holding a direction key
 - `ModernHomeContent` uses extensive row/item build caching (`ModernCarouselRowBuildCache`) to avoid recomposing unchanged catalog rows

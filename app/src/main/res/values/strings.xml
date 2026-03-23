@@ -130,6 +130,7 @@
     <string name="detail_tab_more_like_this">More like this</string>
     <string name="detail_section_network">Network</string>
     <string name="detail_section_production">Production</string>
+    <string name="detail_section_reviews">Comentários</string>
     <string name="episodes_unavailable">Unavailable</string>
     <string name="series_status_ended">Ended</string>
     <string name="series_status_continuing">Ongoing</string>

@@ -250,7 +250,7 @@ fun ModernHomeContent(
                 add(
                     HeroCarouselRow(
                         key = "daily_tips",
-                        title = "Dica do Dia \uD83C\uDFAC",
+                        title = "Dica do Dia ✦",
                         globalRowIndex = -3,
                         items = uiState.dailyTips.take(3).map { tip ->
                             val itemType = tip.type.toApiString()

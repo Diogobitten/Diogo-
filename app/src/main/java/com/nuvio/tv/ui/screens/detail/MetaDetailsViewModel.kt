@@ -479,6 +479,8 @@ class MetaDetailsViewModel @Inject constructor(
         loadMoreLikeThisAsync(meta)
         // MDBList ratings don't depend on enrichment — launch early.
         viewModelScope.launch { loadMDBListRatings(meta) }
+        // TMDB reviews load in parallel too.
+        loadReviewsAsync(meta)
         val enriched = enrichMeta(meta)
         applyMeta(enriched)
         // Episode ratings need enriched meta for accurate TMDB ID resolution.
@@ -533,6 +535,33 @@ class MetaDetailsViewModel @Inject constructor(
 
     private fun shouldLoadMoreLikeThis(settings: TmdbSettings): Boolean {
         return settings.enabled && settings.useMoreLikeThis
+    }
+
+    private var reviewsJob: Job? = null
+
+    private fun loadReviewsAsync(meta: Meta) {
+        reviewsJob?.cancel()
+        reviewsJob = viewModelScope.launch {
+            val tmdbContentType = resolveTmdbContentType(meta)
+            val tmdbLookupType = tmdbContentType.toApiString()
+            val tmdbId = tmdbService.ensureTmdbId(meta.id, tmdbLookupType)
+                ?: tmdbService.ensureTmdbId(itemId, itemType)
+            if (tmdbId.isNullOrBlank()) {
+                _uiState.update { it.copy(tmdbReviews = emptyList()) }
+                return@launch
+            }
+            val reviews = runCatching {
+                tmdbMetadataService.fetchReviews(tmdbId, tmdbContentType)
+            }.getOrElse {
+                Log.w(TAG, "Failed to load reviews for ${meta.id}: ${it.message}")
+                emptyList()
+            }
+            _uiState.update { state ->
+                if (state.meta == null || state.meta.id == meta.id) {
+                    state.copy(tmdbReviews = reviews)
+                } else state
+            }
+        }
     }
 
     private fun loadCollectionAsync(collectionId: Int, collectionName: String?, settings: TmdbSettings) {

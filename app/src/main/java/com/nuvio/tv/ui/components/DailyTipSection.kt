@@ -45,7 +45,7 @@ fun DailyTipSection(
 
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
-            text = "Dica do Dia \uD83C\uDFAC",
+            text = "Dica do Dia ✦",
             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
             color = Color.White,
             modifier = Modifier.padding(start = 48.dp, bottom = 12.dp)

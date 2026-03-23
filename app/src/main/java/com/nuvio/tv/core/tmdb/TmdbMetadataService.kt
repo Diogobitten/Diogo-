@@ -559,6 +559,44 @@ class TmdbMetadataService @Inject constructor(
             ?.filePath
     }
 
+    suspend fun fetchReviews(
+        tmdbId: String,
+        contentType: ContentType
+    ): List<com.nuvio.tv.domain.model.TmdbReview> = withContext(Dispatchers.IO) {
+        try {
+            val numericId = tmdbId.toIntOrNull() ?: return@withContext emptyList()
+            val tmdbType = if (contentType == ContentType.SERIES) "tv" else "movie"
+            val response = when (tmdbType) {
+                "tv" -> tmdbApi.getTvReviews(numericId, TMDB_API_KEY)
+                else -> tmdbApi.getMovieReviews(numericId, TMDB_API_KEY)
+            }
+            val results = response.body()?.results.orEmpty()
+            results.take(10).mapNotNull { review ->
+                val content = review.content?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                val author = review.authorDetails?.username
+                    ?: review.author
+                    ?: return@mapNotNull null
+                val avatarPath = review.authorDetails?.avatarPath
+                val avatarUrl = when {
+                    avatarPath == null -> null
+                    avatarPath.startsWith("/http") -> avatarPath.removePrefix("/")
+                    else -> "https://image.tmdb.org/t/p/w185$avatarPath"
+                }
+                com.nuvio.tv.domain.model.TmdbReview(
+                    id = review.id,
+                    author = author,
+                    avatarUrl = avatarUrl,
+                    rating = review.authorDetails?.rating,
+                    content = content,
+                    createdAt = review.createdAt?.take(10)
+                )
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to fetch reviews for $tmdbId", e)
+            emptyList()
+        }
+    }
+
     suspend fun fetchPersonDetail(
         personId: Int,
         preferCrewCredits: Boolean? = null,

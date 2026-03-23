@@ -8,6 +8,7 @@ import com.nuvio.tv.domain.model.WatchProgress
 import com.nuvio.tv.domain.model.LibraryListTab
 import com.nuvio.tv.domain.model.LibrarySourceMode
 import com.nuvio.tv.domain.model.MDBListRatings
+import com.nuvio.tv.domain.model.TmdbReview
 
 data class MetaDetailsUiState(
     val isLoading: Boolean = true,
@@ -47,6 +48,7 @@ data class MetaDetailsUiState(
     val episodeRatingsError: String? = null,
     val mdbListRatings: MDBListRatings? = null,
     val showMdbListImdb: Boolean = false,
+    val tmdbReviews: List<TmdbReview> = emptyList(),
     val userMessage: String? = null,
     val userMessageIsError: Boolean = false,
     val themeSongAudioUrl: String? = null
