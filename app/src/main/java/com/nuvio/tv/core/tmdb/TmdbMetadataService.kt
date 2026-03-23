@@ -37,6 +37,19 @@ class TmdbMetadataService @Inject constructor(
     private val personCache = ConcurrentHashMap<String, PersonDetail>()
     private val moreLikeThisCache = ConcurrentHashMap<String, List<MetaPreview>>()
 
+    /**
+     * Returns a cached enrichment if available, without triggering a network fetch.
+     */
+    fun getCachedEnrichment(
+        tmdbId: String,
+        contentType: ContentType,
+        language: String = "en"
+    ): TmdbEnrichment? {
+        val normalizedLanguage = normalizeTmdbLanguage(language)
+        val cacheKey = "$tmdbId:${contentType.name}:$normalizedLanguage"
+        return enrichmentCache[cacheKey]
+    }
+
     suspend fun fetchEnrichment(
         tmdbId: String,
         contentType: ContentType,

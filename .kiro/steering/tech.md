@@ -109,6 +109,9 @@
 - `allowHardware(true)` on all image requests (detail backdrop, cast photos, episode thumbnails, company logos, hero logo, grid/content cards, new releases, continue watching)
 - Detail screen backdrop uses `crossfade(false)` for instant display on navigation (no fade-in delay)
 - `MetaDetailsViewModel.applyMetaWithEnrichment()` launches `loadMoreLikeThisAsync`, `loadMDBListRatings`, `loadReviewsAsync`, and `enrichMeta` all in parallel — MDBList ratings and TMDB reviews no longer wait for enrichment to complete
+- Zero-flash TMDB backdrop: detail screen pre-fetches TMDB enrichment in parallel with addon meta via `prefetchTmdbEnrichment()` + `Deferred`; hero carousel applies `getCachedEnrichment()` synchronously before first render — TMDB is the default backdrop source, addon is fallback only
+- `TmdbService.getCachedTmdbId()` provides synchronous cache-only TMDB ID resolution without network calls
+- Home screen startup delays reduced: `loadNewReleases` 800ms, `loadDailyTips` 500ms, `loadAiRecommendations` 1500ms, `loadTmdbDiscovery` 500ms, `loadTraktDiscovery` 800ms, `startupGracePeriod` 1500ms
 - Both `ClassicHomeContent` and `ModernHomeContent` use `LazyListPrefetchStrategy(nestedPrefetchItemCount = 5)` on their vertical `LazyColumn` to pre-compose cards in nested `LazyRow`s across multiple frames before rows scroll into view
 - D-pad key repeat throttling (120ms in Grid, 80ms in Classic and Modern) to prevent HWUI overload when holding a direction key
 - `ModernHomeContent` uses extensive row/item build caching (`ModernCarouselRowBuildCache`) to avoid recomposing unchanged catalog rows

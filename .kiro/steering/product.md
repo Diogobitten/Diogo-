@@ -29,6 +29,7 @@ NuvioTV is an Android TV media player that integrates with the Stremio addon eco
 - "Dica do Dia 🎬" Daily Tips section on Home screen — 3 compact landscape cards showing trending/now-playing movies from TMDB, deterministic daily selection using day-of-year seed, resets daily
 - "Lançamentos Recentes" TMDB Discovery row on Home screen — recently released movies from TMDB Now Playing endpoint, enriched with IMDB IDs, cached for 1 hour, selectable as Hero Catalog
 - HD backdrop images — all TMDB backdrop/background images use `original` size (native resolution, typically 1920x1080+) instead of `w1280` for sharp display on TV screens
+- Zero-flash TMDB backdrop — detail screen pre-fetches TMDB enrichment in parallel with addon meta loading; hero carousel applies cached TMDB backdrop/logo synchronously before first render; Stremio addon images used only as fallback
 - TMDB Reviews on detail screen — user reviews fetched from TMDB API (`movie/{id}/reviews` and `tv/{id}/reviews`), displayed as horizontally scrollable cards with author avatar, rating, date, and truncated review text; cards are D-pad focusable with scale/border animation and 80% transparent background
 
 ## Target Platform

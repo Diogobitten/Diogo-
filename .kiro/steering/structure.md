@@ -101,6 +101,18 @@ com/nuvio/tv/
 - Detail screen backdrop uses `crossfade(false)` for instant display on navigation (no fade-in delay)
 - `MetaDetailsViewModel.applyMetaWithEnrichment()` launches `loadMoreLikeThisAsync`, `loadMDBListRatings`, and `enrichMeta` all in parallel — MDBList ratings no longer wait for enrichment to complete
 
+## Zero-Flash TMDB Backdrop System
+- Detail screen: `loadMeta()` launches `prefetchTmdbEnrichment()` via `viewModelScope.async(Dispatchers.IO)` in parallel with addon meta fetch
+- `prefetchTmdbEnrichment()` resolves TMDB ID and calls `TmdbMetadataService.fetchEnrichment()` early
+- `applyMetaWithEnrichment(meta, earlyEnrichmentDeferred)` awaits the pre-fetched enrichment and applies backdrop/logo to meta BEFORE calling `applyMeta()` — eliminates the backdrop flash entirely
+- TMDB backdrop is the default source; Stremio addon backdrop used only as fallback when TMDB has no image
+- Logo always sourced from TMDB (addons rarely provide logos)
+- Background enrichment (`enrichMeta`) still runs for full metadata (credits, genres, episodes, etc.) but hits the `enrichmentCache` for artwork — no duplicate network call
+- Hero carousel: `updateCatalogRowsPipeline` applies `TmdbMetadataService.getCachedEnrichment()` synchronously (no network) to hero items before first render
+- `TmdbService.getCachedTmdbId()` provides synchronous cache-only TMDB ID lookup (same parsing as `ensureTmdbId` but without network)
+- If TMDB cache has data from previous navigation, hero backdrop/logo/poster appear instantly; otherwise base addon images show until async enrichment completes
+- `applyEnrichedMeta()` updates meta fields without re-triggering trailer/theme song fetches
+
 ## Avatar System
 - `AvatarRepository` tries Supabase catalog first, falls back to multiple public APIs when Supabase is unavailable
 - Fallback avatar sources (all fetched in parallel, cached in-memory):

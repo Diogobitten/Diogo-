@@ -214,5 +214,27 @@ class TmdbService @Inject constructor(
         tmdbToImdbCache[tmdbId] = imdbId
     }
 
+    /**
+     * Returns a cached TMDB ID if available, without triggering a network fetch.
+     * Handles the same ID parsing as [ensureTmdbId] but only checks in-memory cache.
+     */
+    fun getCachedTmdbId(videoId: String, mediaType: String): String? {
+        val cleanId = videoId
+            .removePrefix("tmdb:")
+            .removePrefix("movie:")
+            .removePrefix("series:")
+        val idPart = cleanId
+            .substringBefore(':')
+            .substringBefore('/')
+            .trim()
+        if (idPart.startsWith("tt")) {
+            return imdbToTmdbCache[idPart]?.toString()
+        }
+        if (idPart.all { it.isDigit() }) {
+            return idPart
+        }
+        return null
+    }
+
     fun apiKey(): String = TMDB_API_KEY
 }

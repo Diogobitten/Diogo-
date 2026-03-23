@@ -484,12 +484,32 @@ internal suspend fun HomeViewModel.updateCatalogRowsPipeline() {
 
     // If we already have cached enriched items for the same hero set, use them immediately
     // to avoid a flash where the un-enriched base items briefly show (losing logos/backdrops).
+    // When no full enrichment cache exists, try applying in-memory TMDB cache (getCachedEnrichment)
+    // synchronously — this covers cases where TMDB data was fetched in a previous navigation
+    // and avoids the backdrop flash on first render.
     val initialHeroItems = if (shouldUseEnrichedHeroItems && baseHeroItems.isNotEmpty()) {
         val enrichmentSignature = heroEnrichmentSignaturePipeline(baseHeroItems, tmdbSettings)
         if (lastHeroEnrichmentSignature == enrichmentSignature && lastHeroEnrichedItems.isNotEmpty()) {
             lastHeroEnrichedItems
         } else {
-            baseHeroItems
+            // Try to apply cached TMDB enrichment synchronously (no network) to avoid flash
+            baseHeroItems.map { item ->
+                val tmdbId = tmdbService.getCachedTmdbId(item.id, item.apiType)
+                if (tmdbId != null) {
+                    val cached = tmdbMetadataService.getCachedEnrichment(
+                        tmdbId = tmdbId,
+                        contentType = item.type,
+                        language = tmdbSettings.language
+                    )
+                    if (cached != null && tmdbSettings.useArtwork) {
+                        item.copy(
+                            background = cached.backdrop ?: item.background,
+                            logo = cached.logo ?: item.logo,
+                            poster = cached.poster ?: item.poster
+                        )
+                    } else item
+                } else item
+            }
         }
     } else {
         baseHeroItems

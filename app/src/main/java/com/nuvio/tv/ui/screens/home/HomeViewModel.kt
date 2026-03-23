@@ -189,7 +189,7 @@ class HomeViewModel @Inject constructor(
         loadTraktDiscovery()
         observeInstalledAddons()
         viewModelScope.launch {
-            delay(3000)
+            delay(1500)
             startupGracePeriodActive = false
         }
     }
@@ -268,7 +268,7 @@ class HomeViewModel @Inject constructor(
     private fun loadNewReleases() {
         viewModelScope.launch {
             // Give library time to load before fetching calendar data
-            delay(2000)
+            delay(800)
 
             try {
                 val items = calendarRepository.getCalendarItems(days = 14, pastDays = 7)
@@ -287,7 +287,7 @@ class HomeViewModel @Inject constructor(
 
     private fun loadDailyTips() {
         viewModelScope.launch {
-            delay(1500)
+            delay(500)
             try {
                 val tips = dailyTipService.getDailyTips()
                 if (tips.isNotEmpty()) {
@@ -302,7 +302,7 @@ class HomeViewModel @Inject constructor(
 
     private fun loadAiRecommendations() {
         viewModelScope.launch {
-            delay(3000) // Wait for library to load
+            delay(1500) // Wait for library to load
             try {
                 _uiState.update { it.copy(aiRecommendationsLoading = true) }
                 val row = aiRecommendationService.getAiRecommendationRow()
@@ -331,7 +331,7 @@ class HomeViewModel @Inject constructor(
 
     private fun loadTmdbDiscovery() {
         viewModelScope.launch {
-            delay(1500)
+            delay(500)
             try {
                 val row = tmdbDiscoveryService.getRecentlyReleasedRow()
                 if (row != null) {
@@ -379,7 +379,7 @@ class HomeViewModel @Inject constructor(
                         return@collectLatest
                     }
 
-                    delay(2000)
+                    delay(800)
 
                     try {
                         val rows = traktDiscoveryService.getDiscoveryRows()

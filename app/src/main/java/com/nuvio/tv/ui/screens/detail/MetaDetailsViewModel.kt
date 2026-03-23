@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nuvio.tv.core.player.StreamAutoPlayPolicy
 import com.nuvio.tv.core.network.NetworkResult
+import com.nuvio.tv.core.tmdb.TmdbEnrichment
 import com.nuvio.tv.core.tmdb.TmdbMetadataService
 import com.nuvio.tv.core.tmdb.TmdbService
 import com.nuvio.tv.data.local.LayoutPreferenceDataStore
@@ -34,6 +35,7 @@ import com.nuvio.tv.core.util.isUnreleased
 import java.time.LocalDate
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -364,17 +366,22 @@ class MetaDetailsViewModel @Inject constructor(
             }
 
             val metaLookupId = resolveMetaLookupId(itemId = itemId, itemType = itemType)
+
+            // Start TMDB enrichment in parallel with addon meta fetch.
+            // This way the TMDB backdrop/logo may already be available when the addon responds.
+            val earlyEnrichmentDeferred = viewModelScope.async(Dispatchers.IO) {
+                prefetchTmdbEnrichment()
+            }
+
             val preferExternal = layoutPreferenceDataStore.preferExternalMetaAddonDetail.first()
 
             if (preferExternal) {
-                // 1) Try meta addons first
                 metaRepository.getMetaFromAllAddons(type = itemType, id = metaLookupId).collect { result ->
                     when (result) {
                         is NetworkResult.Success -> {
-                            applyMetaWithEnrichment(result.data)
+                            applyMetaWithEnrichment(result.data, earlyEnrichmentDeferred)
                         }
                         is NetworkResult.Error -> {
-                            // 2) Fallback: try originating addon if meta addons failed
                             val preferred = preferredAddonBaseUrl?.takeIf { it.isNotBlank() }
                             val preferredMeta: Meta? = preferred?.let { baseUrl ->
                                 when (val fallbackResult = metaRepository.getMeta(addonBaseUrl = baseUrl, type = itemType, id = metaLookupId)
@@ -385,7 +392,7 @@ class MetaDetailsViewModel @Inject constructor(
                             }
 
                             if (preferredMeta != null) {
-                                applyMetaWithEnrichment(preferredMeta)
+                                applyMetaWithEnrichment(preferredMeta, earlyEnrichmentDeferred)
                             } else {
                                 _uiState.update { it.copy(isLoading = false, error = result.message) }
                             }
@@ -396,7 +403,6 @@ class MetaDetailsViewModel @Inject constructor(
                     }
                 }
             } else {
-                // Original: prefer catalog addon
                 val preferred = preferredAddonBaseUrl?.takeIf { it.isNotBlank() }
                 val preferredMeta: Meta? = preferred?.let { baseUrl ->
                     when (val result = metaRepository.getMeta(addonBaseUrl = baseUrl, type = itemType, id = metaLookupId)
@@ -407,11 +413,11 @@ class MetaDetailsViewModel @Inject constructor(
                 }
 
                 if (preferredMeta != null) {
-                    applyMetaWithEnrichment(preferredMeta)
+                    applyMetaWithEnrichment(preferredMeta, earlyEnrichmentDeferred)
                 } else {
                     metaRepository.getMetaFromAllAddons(type = itemType, id = metaLookupId).collect { result ->
                         when (result) {
-                            is NetworkResult.Success -> applyMetaWithEnrichment(result.data)
+                            is NetworkResult.Success -> applyMetaWithEnrichment(result.data, earlyEnrichmentDeferred)
                             is NetworkResult.Error -> {
                                 _uiState.update { it.copy(isLoading = false, error = result.message) }
                             }
@@ -423,6 +429,27 @@ class MetaDetailsViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    /**
+     * Pre-fetches TMDB enrichment (backdrop, logo, etc.) in parallel with addon meta loading.
+     * Returns the enrichment result or null if TMDB ID can't be resolved or fetch fails.
+     */
+    private suspend fun prefetchTmdbEnrichment(): TmdbEnrichment? {
+        val settings = tmdbSettingsDataStore.settings.first()
+        if (!settings.enabled) return null
+
+        val contentType = parseApiTypeToContentType(itemType) ?: ContentType.MOVIE
+        val tmdbLookupType = contentType.toApiString()
+        val tmdbId = tmdbService.ensureTmdbId(itemId, tmdbLookupType) ?: return null
+
+        return runCatching {
+            tmdbMetadataService.fetchEnrichment(
+                tmdbId = tmdbId,
+                contentType = contentType,
+                language = settings.language
+            )
+        }.getOrNull()
     }
 
     private suspend fun resolveMetaLookupId(itemId: String, itemType: String): String {
@@ -474,17 +501,71 @@ class MetaDetailsViewModel @Inject constructor(
         fetchThemeSong()
     }
 
-    private suspend fun applyMetaWithEnrichment(meta: Meta) {
+    private suspend fun applyMetaWithEnrichment(
+        meta: Meta,
+        earlyEnrichmentDeferred: Deferred<TmdbEnrichment?>? = null
+    ) {
+        // If we have an early TMDB enrichment (pre-fetched in parallel with addon meta),
+        // apply backdrop/logo to meta BEFORE showing it — this eliminates the backdrop flash.
+        val displayMeta = if (earlyEnrichmentDeferred != null) {
+            val earlyEnrichment = try {
+                earlyEnrichmentDeferred.await()
+            } catch (e: Exception) {
+                Log.w(TAG, "Early TMDB enrichment failed: ${e.message}")
+                null
+            }
+            if (earlyEnrichment != null) {
+                meta.copy(
+                    background = earlyEnrichment.backdrop ?: meta.background,
+                    logo = earlyEnrichment.logo ?: meta.logo
+                )
+            } else meta
+        } else meta
+
+        // Show meta immediately so the UI renders without waiting for full enrichment.
+        applyMeta(displayMeta)
         // Fire all independent async jobs immediately — they run in parallel.
-        loadMoreLikeThisAsync(meta)
+        loadMoreLikeThisAsync(displayMeta)
         // MDBList ratings don't depend on enrichment — launch early.
-        viewModelScope.launch { loadMDBListRatings(meta) }
+        viewModelScope.launch { loadMDBListRatings(displayMeta) }
         // TMDB reviews load in parallel too.
-        loadReviewsAsync(meta)
-        val enriched = enrichMeta(meta)
-        applyMeta(enriched)
-        // Episode ratings need enriched meta for accurate TMDB ID resolution.
-        loadEpisodeRatingsAsync(enriched)
+        loadReviewsAsync(displayMeta)
+        // Enrich in background and update UI when ready.
+        viewModelScope.launch {
+            val enriched = enrichMeta(displayMeta)
+            if (enriched !== displayMeta) {
+                // Only update meta fields — trailer/theme song already fetching from base meta.
+                applyEnrichedMeta(enriched)
+            }
+            // Episode ratings need enriched meta for accurate TMDB ID resolution.
+            loadEpisodeRatingsAsync(enriched)
+        }
+    }
+
+    /**
+     * Applies enriched meta without re-triggering trailer/theme song fetches.
+     */
+    private fun applyEnrichedMeta(meta: Meta) {
+        val seasons = meta.videos
+            .mapNotNull { it.season }
+            .distinct()
+            .sorted()
+
+        val currentState = _uiState.value
+        val selectedSeason = currentState.selectedSeason.takeIf { it in seasons }
+            ?: seasons.firstOrNull { it > 0 }
+            ?: seasons.firstOrNull()
+            ?: 1
+        val episodesForSeason = getEpisodesForSeason(meta.videos, selectedSeason)
+
+        _uiState.update {
+            it.copy(
+                meta = meta,
+                seasons = seasons,
+                selectedSeason = selectedSeason,
+                episodesForSeason = episodesForSeason
+            )
+        }
     }
 
     private fun loadMoreLikeThisAsync(meta: Meta) {
@@ -744,7 +825,9 @@ class MetaDetailsViewModel @Inject constructor(
 
         if (enrichment != null && settings.useArtwork) {
             updated = updated.copy(
+                // Backdrop: prefer TMDB HD image, addon as fallback
                 background = enrichment.backdrop ?: updated.background,
+                // Logo: always prefer TMDB (addons rarely provide logos)
                 logo = enrichment.logo ?: updated.logo
             )
         }
