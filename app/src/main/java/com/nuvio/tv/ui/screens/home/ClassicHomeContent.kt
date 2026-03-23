@@ -29,6 +29,7 @@ import androidx.tv.material3.ExperimentalTvMaterial3Api
 import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.ui.components.CatalogRowSection
 import com.nuvio.tv.ui.components.ContinueWatchingSection
+import com.nuvio.tv.ui.components.DailyTipSection
 import com.nuvio.tv.ui.components.HeroCarousel
 import com.nuvio.tv.ui.components.NewReleasesSection
 import com.nuvio.tv.ui.components.PosterCardStyle
@@ -63,6 +64,7 @@ fun ClassicHomeContent(
     onItemFocus: (MetaPreview) -> Unit = {},
     onNewReleaseClick: (com.nuvio.tv.domain.model.CalendarItem) -> Unit = {},
     onStreamingServiceClick: (String) -> Unit = {},
+    onDailyTipClick: (MetaPreview) -> Unit = {},
     onSaveFocusState: (Int, Int, Int, Int, Map<String, Int>) -> Unit
 ) {
 
@@ -201,6 +203,15 @@ fun ClassicHomeContent(
                 NewReleasesSection(
                     items = uiState.newReleases,
                     onItemClick = onNewReleaseClick
+                )
+            }
+        }
+
+        if (uiState.dailyTips.isNotEmpty()) {
+            item(key = "daily_tips", contentType = "daily_tips") {
+                DailyTipSection(
+                    items = uiState.dailyTips,
+                    onItemClick = onDailyTipClick
                 )
             }
         }

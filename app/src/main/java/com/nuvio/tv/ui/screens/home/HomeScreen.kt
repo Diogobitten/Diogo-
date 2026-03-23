@@ -438,6 +438,10 @@ private fun ClassicHomeRoute(
             )
         },
         onStreamingServiceClick = onStreamingServiceClick,
+        onDailyTipClick = { tip ->
+            val type = tip.type.toApiString()
+            onNavigateToDetail(tip.id, type, "")
+        },
         onSaveFocusState = { vi, vo, ri, ii, m ->
             viewModel.saveFocusState(vi, vo, ri, ii, m)
         }
@@ -495,6 +499,10 @@ private fun GridHomeRoute(
             )
         },
         onStreamingServiceClick = onStreamingServiceClick,
+        onDailyTipClick = { tip ->
+            val type = tip.type.toApiString()
+            onNavigateToDetail(tip.id, type, "")
+        },
         onSaveGridFocusState = { vi, vo ->
             viewModel.saveGridFocusState(vi, vo)
         }
@@ -579,6 +587,10 @@ private fun ModernHomeRoute(
             )
         },
         onStreamingServiceClick = onStreamingServiceClick,
+        onDailyTipClick = { tip ->
+            val type = tip.type.toApiString()
+            onNavigateToDetail(tip.id, type, "")
+        },
         onSaveFocusState = saveModernFocusState
     )
 }

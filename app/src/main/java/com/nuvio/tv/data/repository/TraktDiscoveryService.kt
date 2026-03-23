@@ -261,7 +261,7 @@ class TraktDiscoveryService @Inject constructor(
             return item.copy(
                 id = cached.imdbId ?: item.id,
                 poster = cached.poster?.let { "${TMDB_IMAGE_BASE}w500$it" },
-                background = cached.backdrop?.let { "${TMDB_IMAGE_BASE}w1280$it" },
+                background = cached.backdrop?.let { "${TMDB_IMAGE_BASE}original$it" },
                 imdbId = cached.imdbId
             )
         }
@@ -301,7 +301,7 @@ class TraktDiscoveryService @Inject constructor(
                 id = imdbId ?: item.id,
                 name = (if (mediaType == "movie") details.title else details.name) ?: item.name,
                 poster = details.posterPath?.let { "${TMDB_IMAGE_BASE}w500$it" },
-                background = details.backdropPath?.let { "${TMDB_IMAGE_BASE}w1280$it" },
+                background = details.backdropPath?.let { "${TMDB_IMAGE_BASE}original$it" },
                 releaseInfo = (details.releaseDate ?: details.firstAirDate)
                     ?.take(4)?.takeIf { it.length == 4 },
                 imdbId = imdbId

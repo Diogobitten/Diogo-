@@ -52,7 +52,9 @@ data class HomeUiState(
     val hideUnreleasedContent: Boolean = false,
     val startupAuthNotice: StartupAuthNotice? = null,
     val streamingServiceNames: List<String> = emptyList(),
-    val streamingServiceAddonName: String? = null
+    val streamingServiceAddonName: String? = null,
+    val dailyTips: List<MetaPreview> = emptyList(),
+    val aiRecommendationsLoading: Boolean = false
 )
 
 @Immutable

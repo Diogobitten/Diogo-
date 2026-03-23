@@ -141,6 +141,32 @@ internal suspend fun HomeViewModel.loadAllCatalogsPipeline(
             }
         }
 
+        // Re-insert AI recommendation row if it was loaded
+        aiRecommendationRow?.let { row ->
+            val key = catalogKey(
+                addonId = row.addonId,
+                type = row.apiType,
+                catalogId = row.catalogId
+            )
+            catalogsMap[key] = row
+            if (key !in catalogOrder) {
+                catalogOrder.add(0, key)
+            }
+        }
+
+        // Re-insert TMDB recently released row if it was loaded
+        tmdbRecentlyReleasedRow?.let { row ->
+            val key = catalogKey(
+                addonId = row.addonId,
+                type = row.apiType,
+                catalogId = row.catalogId
+            )
+            catalogsMap[key] = row
+            if (key !in catalogOrder) {
+                catalogOrder.add(key)
+            }
+        }
+
         if (catalogOrder.isEmpty()) {
             catalogsLoadInProgress = false
             _uiState.update { it.copy(isLoading = false, error = "No catalog addons installed") }

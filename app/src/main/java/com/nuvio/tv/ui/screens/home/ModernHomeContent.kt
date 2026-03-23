@@ -135,6 +135,7 @@ fun ModernHomeContent(
     onPreloadAdjacentItem: (MetaPreview) -> Unit = {},
     onNewReleaseClick: (com.nuvio.tv.domain.model.CalendarItem) -> Unit = {},
     onStreamingServiceClick: (String) -> Unit = {},
+    onDailyTipClick: (com.nuvio.tv.domain.model.MetaPreview) -> Unit = {},
     onSaveFocusState: (Int, Int, Int, Int, Map<String, Int>) -> Unit
 ) {
     val defaultBringIntoViewSpec = LocalBringIntoViewSpec.current
@@ -172,6 +173,7 @@ fun ModernHomeContent(
     val carouselRows = remember(
         uiState.continueWatchingItems,
         uiState.newReleases,
+        uiState.dailyTips,
         visibleCatalogRows,
         useLandscapePosters,
         showCatalogTypeSuffixInModern,
@@ -235,6 +237,62 @@ fun ModernHomeContent(
                                     addonBaseUrl = "",
                                     trailerTitle = calendarItem.showName ?: calendarItem.title,
                                     trailerReleaseInfo = calendarItem.date,
+                                    trailerApiType = itemType
+                                )
+                            )
+                        }
+                    )
+                )
+            }
+
+            // Daily Tips row
+            if (uiState.dailyTips.isNotEmpty()) {
+                add(
+                    HeroCarouselRow(
+                        key = "daily_tips",
+                        title = "Dica do Dia \uD83C\uDFAC",
+                        globalRowIndex = -3,
+                        items = uiState.dailyTips.take(3).map { tip ->
+                            val itemType = tip.type.toApiString()
+                            ModernCarouselItem(
+                                key = "dt_${tip.id}",
+                                title = tip.name,
+                                subtitle = buildString {
+                                    tip.releaseInfo?.let { append(it) }
+                                    tip.imdbRating?.let {
+                                        if (isNotEmpty()) append(" · ")
+                                        append("⭐ %.1f".format(it))
+                                    }
+                                },
+                                imageUrl = if (useLandscapePosters) {
+                                    tip.background ?: tip.poster
+                                } else {
+                                    tip.poster ?: tip.background
+                                },
+                                heroPreview = HeroPreview(
+                                    title = tip.name,
+                                    logo = null,
+                                    description = tip.description,
+                                    contentTypeText = "Filme",
+                                    isSeries = false,
+                                    yearText = tip.releaseInfo,
+                                    imdbText = tip.imdbRating?.let { "%.1f".format(it) },
+                                    genres = tip.genres,
+                                    poster = tip.poster,
+                                    backdrop = tip.background,
+                                    imageUrl = if (useLandscapePosters) {
+                                        tip.background ?: tip.poster
+                                    } else {
+                                        tip.poster ?: tip.background
+                                    }
+                                ),
+                                payload = ModernPayload.Catalog(
+                                    focusKey = "dt::${tip.id}",
+                                    itemId = tip.id,
+                                    itemType = itemType,
+                                    addonBaseUrl = "",
+                                    trailerTitle = tip.name,
+                                    trailerReleaseInfo = tip.releaseInfo,
                                     trailerApiType = itemType
                                 )
                             )

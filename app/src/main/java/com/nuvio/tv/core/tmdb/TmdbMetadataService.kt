@@ -135,7 +135,7 @@ class TmdbMetadataService @Inject constructor(
                         )
                     }
                 val poster = buildImageUrl(details?.posterPath, size = "w500")
-                val backdrop = buildImageUrl(details?.backdropPath, size = "w1280")
+                val backdrop = buildImageUrl(details?.backdropPath, size = "original")
                 
                 val collectionId = details?.belongsToCollection?.id
                 val collectionName = details?.belongsToCollection?.name
@@ -412,7 +412,7 @@ class TmdbMetadataService @Inject constructor(
                             )
                         }
 
-                        val backdrop = buildImageUrl(localizedBackdropPath ?: rec.backdropPath, size = "w1280")
+                        val backdrop = buildImageUrl(localizedBackdropPath ?: rec.backdropPath, size = "original")
                         val fallbackPoster = buildImageUrl(rec.posterPath, size = "w780")
 
                         val releaseInfo = if (recTmdbType == "tv") {
@@ -492,7 +492,7 @@ class TmdbMetadataService @Inject constructor(
                             )
                         }
 
-                        val backdrop = buildImageUrl(localizedBackdropPath ?: part.backdropPath, size = "w1280")
+                        val backdrop = buildImageUrl(localizedBackdropPath ?: part.backdropPath, size = "original")
                         val fallbackPoster = buildImageUrl(part.posterPath, size = "w780")
                         val releaseInfo = part.releaseDate?.take(4)
 
@@ -650,7 +650,7 @@ class TmdbMetadataService @Inject constructor(
                     name = title,
                     poster = buildImageUrl(credit.posterPath, "w500"),
                     posterShape = PosterShape.POSTER,
-                    background = buildImageUrl(credit.backdropPath, "w1280"),
+                    background = buildImageUrl(credit.backdropPath, "original"),
                     logo = null,
                     description = credit.overview?.takeIf { it.isNotBlank() },
                     releaseInfo = year,
@@ -675,7 +675,7 @@ class TmdbMetadataService @Inject constructor(
                     name = title,
                     poster = buildImageUrl(credit.posterPath, "w500"),
                     posterShape = PosterShape.POSTER,
-                    background = buildImageUrl(credit.backdropPath, "w1280"),
+                    background = buildImageUrl(credit.backdropPath, "original"),
                     logo = null,
                     description = credit.overview?.takeIf { it.isNotBlank() },
                     releaseInfo = year,
@@ -700,7 +700,7 @@ class TmdbMetadataService @Inject constructor(
                     name = title,
                     poster = buildImageUrl(credit.posterPath, "w500"),
                     posterShape = PosterShape.POSTER,
-                    background = buildImageUrl(credit.backdropPath, "w1280"),
+                    background = buildImageUrl(credit.backdropPath, "original"),
                     logo = null,
                     description = credit.overview?.takeIf { it.isNotBlank() },
                     releaseInfo = year,
@@ -725,7 +725,7 @@ class TmdbMetadataService @Inject constructor(
                     name = title,
                     poster = buildImageUrl(credit.posterPath, "w500"),
                     posterShape = PosterShape.POSTER,
-                    background = buildImageUrl(credit.backdropPath, "w1280"),
+                    background = buildImageUrl(credit.backdropPath, "original"),
                     logo = null,
                     description = credit.overview?.takeIf { it.isNotBlank() },
                     releaseInfo = year,

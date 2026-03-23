@@ -39,7 +39,7 @@ com/nuvio/tv/
 │   │   ├── api/                 # Retrofit API interfaces (AddonApi, TraktApi, TmdbApi, etc.)
 │   │   ├── dto/                 # Network response DTOs
 │   │   └── supabase/            # Supabase-specific data access (AvatarRepository with TMDB fallback)
-│   ├── repository/              # Repository implementations (*Impl classes)
+│   ├── repository/              # Repository implementations (*Impl classes), AI/TMDB discovery services
 │   ├── trailer/                 # Trailer data handling
 │   └── themesong/               # Theme song service (ThemerrDB + YouTube audio extraction)
 │
@@ -252,7 +252,7 @@ com/nuvio/tv/
 - Trakt API endpoints: `GET /movies/trending`, `GET /shows/trending`, `GET /movies/popular`, `GET /shows/popular`, `GET /movies/anticipated`, `GET /shows/anticipated`, `GET /recommendations/movies` (auth required), `GET /recommendations/shows` (auth required)
 - Popular endpoints return flat `TraktMovieDto`/`TraktShowDto` objects; Trending/Anticipated/Recommended return wrapped DTOs with watchers/listCount/userCount
 - DTOs in `data/remote/dto/trakt/TraktDiscoveryDtos.kt`: `TraktTrendingMovieDto`, `TraktTrendingShowDto`, `TraktAnticipatedMovieDto`, `TraktAnticipatedShowDto`, `TraktRecommendedMovieDto`, `TraktRecommendedShowDto`
-- Items enriched with TMDB images: poster (`w500`), backdrop (`w1280`), and IMDB ID for navigation — fetched via `TmdbApi.getMovieDetails()`/`getTvDetails()` + `getMovieExternalIds()`/`getTvExternalIds()`
+- Items enriched with TMDB images: poster (`w500`), backdrop (`original`), and IMDB ID for navigation — fetched via `TmdbApi.getMovieDetails()`/`getTvDetails()` + `getMovieExternalIds()`/`getTvExternalIds()`
 - TMDB enrichment runs with concurrency limit of 6 (`Semaphore(6)`), items without poster or backdrop are filtered out
 - TMDB image data cached in-memory (`ConcurrentHashMap`) per session; TMDB↔IMDB mappings pre-cached in `TmdbService`
 - Discovery rows cached for 30 minutes (`CACHE_TTL_MS`); cache cleared on Trakt logout
@@ -303,3 +303,48 @@ com/nuvio/tv/
 - DTOs: `OpenAiDtos.kt` in `data/remote/dto/openai/` (ChatCompletionRequest, ChatMessage, etc.)
 - API interface: `OpenAiApi.kt` in `data/remote/api/` — `@Named("openai")` Retrofit instance at `https://api.openai.com/v1/`
 - TMDB endpoints used by Diobot: `searchMulti`, `getTrendingMovies`, `getTrendingTv`, `getNowPlayingMovies`, `getUpcomingMovies`, `getMovieExternalIds`, `getTvExternalIds`
+
+## AI Recommendations System ("Feito pra Você 🤖")
+- `AiRecommendationService` (`data/repository/`) uses OpenAI `gpt-4o-mini` to analyze user's library and suggest 15 personalized movies/series
+- System prompt includes up to 50 library titles with genres and ratings for context
+- OpenAI returns structured JSON with `title`, `year`, `type` (movie/series), and `reason` fields
+- Items enriched with TMDB images: poster (`w500`), backdrop (`original`), and IMDB ID via `TmdbApi.searchMovie()`/`searchTv()` + `getMovieExternalIds()`/`getTvExternalIds()`
+- TMDB enrichment runs with `Semaphore(6)` concurrency limit; items without poster are filtered out
+- Appears as `CatalogRow` with `addonId = "ai-recommendations"`, `catalogId = "ai-for-you"`, `catalogName = "Feito pra Você 🤖"`
+- Cache of 1 hour (`CACHE_TTL_MS`); only appears if `OPENAI_API_KEY` is configured and library is not empty
+- Row stored in `HomeViewModel.aiRecommendationRow` and re-inserted after `rebuildCatalogOrder()` in the catalog pipeline
+- Selectable as Hero Catalog in Layout Settings (`key = "ai-recommendations_movie_ai-for-you"`)
+- `HomeUiState.aiRecommendationsLoading: Boolean` tracks loading state
+- Uses `@Named("openai")` Retrofit instance (same as Diobot)
+
+## Daily Tips System ("Dica do Dia 🎬")
+- `DailyTipService` (`data/repository/`) selects 3 movies from TMDB trending + now playing using day-of-year as deterministic seed
+- Fetches `getTrendingMovies("day")` and `getNowPlayingMovies()` in parallel, merges and deduplicates by TMDB ID
+- Seed-based selection: `(dayOfYear * 31 + index * 17) % poolSize` ensures same 3 movies all day, different movies each day
+- Items enriched with IMDB IDs via `getMovieExternalIds()` with `Semaphore(4)` concurrency
+- `MetaPreview` objects with poster (`w500`), backdrop (`original`), rating, year, and genres
+- Cache resets daily (keyed by `dayOfYear`); in-memory `ConcurrentHashMap`
+- `DailyTipSection` composable: 3 compact landscape cards (100dp height) in a `Row` layout
+- Cards show backdrop image with gradient overlay, title, year, and star rating
+- Focusable with scale animation (1.05x) and border highlight on focus
+- Added to all 3 home layouts between New Releases and Continue Watching
+- In Modern layout, rendered as a `HeroCarouselRow` with `globalRowIndex = -3`
+- `HomeUiState.dailyTips: List<MetaPreview>` holds the items
+- `onDailyTipClick` callback navigates to detail screen via IMDB ID
+
+## TMDB Discovery System ("Lançamentos Recentes")
+- `TmdbDiscoveryService` (`data/repository/`) fetches 2 pages of `getNowPlayingMovies()` from TMDB (~40 movies)
+- Items enriched with IMDB IDs via `getMovieExternalIds()` with `Semaphore(6)` concurrency
+- `MetaPreview` objects with poster (`w500`), backdrop (`original`), rating, year
+- Appears as `CatalogRow` with `addonId = "tmdb-discovery"`, `catalogId = "tmdb-recently-released"`, `catalogName = "Lançamentos Recentes"`
+- Cache of 1 hour (`CACHE_TTL_MS`); in-memory `ConcurrentHashMap`
+- Row stored in `HomeViewModel.tmdbRecentlyReleasedRow` and re-inserted after `rebuildCatalogOrder()`
+- Selectable as Hero Catalog in Layout Settings (`key = "tmdb-discovery_movie_tmdb-recently-released"`)
+- No authentication required — uses only public TMDB API
+
+## HD Backdrop Images
+- All TMDB backdrop/background images use `original` size instead of `w1280`
+- `original` provides native resolution (typically 1920x1080 or higher), ideal for TV displays
+- Applied across: `TmdbMetadataService` (recommendations, collection parts, cast credits), `TraktDiscoveryService`, `AiRecommendationService`, `DailyTipService`, `TmdbDiscoveryService`
+- Poster images remain at `w500` (sufficient for card thumbnails)
+- Calendar items use smaller sizes (`w500` for episode stills, `w780` for calendar card backdrops) as they display in compact UI

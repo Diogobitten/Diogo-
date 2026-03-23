@@ -58,6 +58,7 @@ import androidx.tv.material3.Icon
 import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.ui.components.GridContentCard
 import com.nuvio.tv.ui.components.GridContinueWatchingSection
+import com.nuvio.tv.ui.components.DailyTipSection
 import com.nuvio.tv.ui.components.HeroCarousel
 import com.nuvio.tv.ui.components.NewReleasesSection
 import com.nuvio.tv.ui.components.PosterCardDefaults
@@ -95,6 +96,7 @@ fun GridHomeContent(
     onItemFocus: (com.nuvio.tv.domain.model.MetaPreview) -> Unit = {},
     onNewReleaseClick: (com.nuvio.tv.domain.model.CalendarItem) -> Unit = {},
     onStreamingServiceClick: (String) -> Unit = {},
+    onDailyTipClick: (com.nuvio.tv.domain.model.MetaPreview) -> Unit = {},
     onSaveGridFocusState: (Int, Int) -> Unit
 ) {
     val gridState = rememberLazyGridState(
@@ -265,6 +267,7 @@ fun GridHomeContent(
         ) {
             var continueWatchingInserted = false
             var newReleasesInserted = false
+            var dailyTipsInserted = false
             var streamingServicesInserted = false
             var firstGridFocusableAssigned = false
             val contentOccurrencesByCatalogAndId = mutableMapOf<String, Int>()
@@ -327,6 +330,21 @@ fun GridHomeContent(
                                 NewReleasesSection(
                                     items = uiState.newReleases,
                                     onItemClick = onNewReleaseClick
+                                )
+                            }
+                        }
+
+                        // Insert daily tips
+                        if (!dailyTipsInserted && uiState.dailyTips.isNotEmpty()) {
+                            dailyTipsInserted = true
+                            item(
+                                key = "daily_tips",
+                                span = { GridItemSpan(maxLineSpan) },
+                                contentType = "daily_tips"
+                            ) {
+                                DailyTipSection(
+                                    items = uiState.dailyTips,
+                                    onItemClick = onDailyTipClick
                                 )
                             }
                         }

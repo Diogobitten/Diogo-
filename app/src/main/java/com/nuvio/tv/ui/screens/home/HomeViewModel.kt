@@ -14,7 +14,10 @@ import com.nuvio.tv.data.local.TmdbSettingsDataStore
 import com.nuvio.tv.data.local.TraktAuthDataStore
 import com.nuvio.tv.data.local.TraktSettingsDataStore
 import com.nuvio.tv.data.local.WatchedItemsPreferences
+import com.nuvio.tv.data.repository.AiRecommendationService
 import com.nuvio.tv.data.repository.CalendarRepository
+import com.nuvio.tv.data.repository.DailyTipService
+import com.nuvio.tv.data.repository.TmdbDiscoveryService
 import com.nuvio.tv.data.repository.TraktAuthService
 import com.nuvio.tv.data.repository.TraktDiscoveryService
 import com.nuvio.tv.data.trailer.TrailerService
@@ -65,7 +68,10 @@ class HomeViewModel @Inject constructor(
     internal val calendarRepository: CalendarRepository,
     internal val traktDiscoveryService: TraktDiscoveryService,
     internal val traktAuthService: TraktAuthService,
-    internal val traktAuthDataStore: TraktAuthDataStore
+    internal val traktAuthDataStore: TraktAuthDataStore,
+    internal val aiRecommendationService: AiRecommendationService,
+    internal val dailyTipService: DailyTipService,
+    internal val tmdbDiscoveryService: TmdbDiscoveryService
 ) : ViewModel() {
     companion object {
         internal const val TAG = "HomeViewModel"
@@ -137,6 +143,8 @@ class HomeViewModel @Inject constructor(
     internal var trailerPreviewRequestVersion: Long = 0L
     internal var currentTmdbSettings: TmdbSettings = TmdbSettings()
     internal var traktDiscoveryRows: List<CatalogRow> = emptyList()
+    internal var aiRecommendationRow: CatalogRow? = null
+    internal var tmdbRecentlyReleasedRow: CatalogRow? = null
     internal var heroEnrichmentJob: Job? = null
     internal var lastHeroEnrichmentSignature: String? = null
     internal var lastHeroEnrichedItems: List<MetaPreview> = emptyList()
@@ -175,6 +183,9 @@ class HomeViewModel @Inject constructor(
         observeStartupAuthNotice()
         loadContinueWatching()
         loadNewReleases()
+        loadDailyTips()
+        loadAiRecommendations()
+        loadTmdbDiscovery()
         loadTraktDiscovery()
         observeInstalledAddons()
         viewModelScope.launch {
@@ -270,6 +281,75 @@ class HomeViewModel @Inject constructor(
                 _uiState.update { it.copy(newReleases = filtered) }
             } catch (e: Exception) {
                 android.util.Log.w(TAG, "Failed to load new releases: ${e.message}", e)
+            }
+        }
+    }
+
+    private fun loadDailyTips() {
+        viewModelScope.launch {
+            delay(1500)
+            try {
+                val tips = dailyTipService.getDailyTips()
+                if (tips.isNotEmpty()) {
+                    android.util.Log.d(TAG, "Daily tips: ${tips.size} items")
+                    _uiState.update { it.copy(dailyTips = tips) }
+                }
+            } catch (e: Exception) {
+                android.util.Log.w(TAG, "Failed to load daily tips: ${e.message}", e)
+            }
+        }
+    }
+
+    private fun loadAiRecommendations() {
+        viewModelScope.launch {
+            delay(3000) // Wait for library to load
+            try {
+                _uiState.update { it.copy(aiRecommendationsLoading = true) }
+                val row = aiRecommendationService.getAiRecommendationRow()
+                if (row != null) {
+                    aiRecommendationRow = row
+                    val key = catalogKey(
+                        addonId = row.addonId,
+                        type = row.apiType,
+                        catalogId = row.catalogId
+                    )
+                    catalogsMap[key] = row
+                    if (key !in catalogOrder) {
+                        // Insert at the beginning so it appears first among catalog rows
+                        catalogOrder.add(0, key)
+                    }
+                    android.util.Log.d(TAG, "AI recommendations loaded: ${row.items.size} items")
+                    scheduleUpdateCatalogRows()
+                }
+            } catch (e: Exception) {
+                android.util.Log.w(TAG, "Failed to load AI recommendations: ${e.message}", e)
+            } finally {
+                _uiState.update { it.copy(aiRecommendationsLoading = false) }
+            }
+        }
+    }
+
+    private fun loadTmdbDiscovery() {
+        viewModelScope.launch {
+            delay(1500)
+            try {
+                val row = tmdbDiscoveryService.getRecentlyReleasedRow()
+                if (row != null) {
+                    tmdbRecentlyReleasedRow = row
+                    val key = catalogKey(
+                        addonId = row.addonId,
+                        type = row.apiType,
+                        catalogId = row.catalogId
+                    )
+                    catalogsMap[key] = row
+                    if (key !in catalogOrder) {
+                        catalogOrder.add(key)
+                    }
+                    android.util.Log.d(TAG, "TMDB recently released loaded: ${row.items.size} items")
+                    scheduleUpdateCatalogRows()
+                }
+            } catch (e: Exception) {
+                android.util.Log.w(TAG, "Failed to load TMDB discovery: ${e.message}", e)
             }
         }
     }

@@ -462,7 +462,19 @@ class LayoutSettingsViewModel @Inject constructor(
                     } else emptyList()
                 } catch (_: Exception) { emptyList() }
 
-                updateUiStateIfChanged { it.copy(availableCatalogs = catalogs + traktCatalogs) }
+                // Add AI recommendations catalog if OpenAI key is configured
+                val aiCatalogs = if (com.nuvio.tv.BuildConfig.OPENAI_API_KEY.isNotBlank()) {
+                    listOf(
+                        CatalogInfo(key = "ai-recommendations_movie_ai-for-you", name = "Feito pra Você \uD83E\uDD16", addonName = "IA")
+                    )
+                } else emptyList()
+
+                // Add TMDB discovery catalogs
+                val tmdbCatalogs = listOf(
+                    CatalogInfo(key = "tmdb-discovery_movie_tmdb-recently-released", name = "Lançamentos Recentes", addonName = "TMDB")
+                )
+
+                updateUiStateIfChanged { it.copy(availableCatalogs = catalogs + traktCatalogs + aiCatalogs + tmdbCatalogs) }
             }
         }
     }

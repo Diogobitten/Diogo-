@@ -87,7 +87,7 @@
 - API keys and secrets go in `local.properties` (production) or `local.dev.properties` (debug)
 - See `local.example.properties` for required keys
 - `TMDB_API_KEY` is set in `defaultConfig` (from `local.properties`) and applies to all build types
-- `OPENAI_API_KEY` is set in `defaultConfig` (from `local.properties`) and applies to all build types — used by Diobot AI Concierge
+- `OPENAI_API_KEY` is set in `defaultConfig` (from `local.properties`) and applies to all build types — used by Diobot AI Concierge and AI Recommendations ("Feito pra Você 🤖")
 - Debug build type overrides Supabase/server URLs from `local.dev.properties` but inherits `TMDB_API_KEY` from `defaultConfig`
 - Environment variables override local.properties (used in CI): `NUVIO_RELEASE_STORE_FILE`, `NUVIO_RELEASE_KEY_ALIAS`, etc.
 - Debug builds use `com.nuviodebug.com` applicationId; release uses `com.nuvio.tv`
@@ -105,6 +105,7 @@
 ## Performance Tuning
 - Coil ImageLoader (`NuvioApplication`): 50% memory cache, 250MB disk cache, 4 decoder threads, 4 fetcher threads, 4 bitmap factory parallelism, RGB565 enabled, hardware bitmaps enabled, crossfade disabled, `respectCacheHeaders(false)` to skip HTTP revalidation
 - All image requests use explicit `memoryCacheKey` and `diskCacheKey` with URL + size for deterministic cache hits
+- TMDB backdrop/background images use `original` size (native 1920x1080+) for sharp TV display; poster images use `w500`
 - `allowHardware(true)` on all image requests (detail backdrop, cast photos, episode thumbnails, company logos, hero logo, grid/content cards, new releases, continue watching)
 - Detail screen backdrop uses `crossfade(false)` for instant display on navigation (no fade-in delay)
 - `MetaDetailsViewModel.applyMetaWithEnrichment()` launches `loadMoreLikeThisAsync`, `loadMDBListRatings`, and `enrichMeta` all in parallel — MDBList ratings no longer wait for enrichment to complete
