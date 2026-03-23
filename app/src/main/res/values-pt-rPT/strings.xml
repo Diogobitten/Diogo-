@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Nuvio</string>
+    <string name="app_name">Diogo+</string>
     <string name="type_movie">Filme</string>
     <string name="type_series">Série</string>
     <string name="type_unknown">Desconhecido</string>g>
@@ -1040,8 +1040,12 @@
     <string name="nav_discover">Descobrir</string>
     <string name="nav_search">Pesquisar</string>
     <string name="nav_library">Biblioteca</string>
+    <string name="nav_calendar">Calendário</string>
+    <string name="nav_movies">Filmes</string>
+    <string name="nav_series">Séries</string>
     <string name="nav_addons">Addons</string>
     <string name="nav_settings">Definições</string>
+    <string name="nav_diobot">Diobot</string>
     <string name="settings_rounded_ui">Interface Arredondada</string>
     <string name="cd_expand_sidebar">Expandir barra lateral</string>
 

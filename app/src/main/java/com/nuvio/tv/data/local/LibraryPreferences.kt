@@ -77,6 +77,12 @@ class LibraryPreferences @Inject constructor(
         return libraryItems.first()
     }
 
+    suspend fun clearAll() {
+        store().edit { preferences ->
+            preferences.remove(libraryItemsKey)
+        }
+    }
+
     suspend fun mergeRemoteItems(remoteItems: List<SavedLibraryItem>) {
         store().edit { preferences ->
             val current = preferences[libraryItemsKey] ?: emptySet()

@@ -9,6 +9,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -18,6 +20,7 @@ import com.nuvio.tv.ui.screens.CatalogSeeAllScreen
 import com.nuvio.tv.ui.screens.LayoutSelectionScreen
 import com.nuvio.tv.ui.screens.detail.MetaDetailsScreen
 import com.nuvio.tv.ui.screens.home.HomeScreen
+import com.nuvio.tv.ui.screens.home.HomeViewModel
 import com.nuvio.tv.ui.screens.addon.AddonManagerScreen
 import com.nuvio.tv.ui.screens.addon.CatalogOrderScreen
 import com.nuvio.tv.ui.screens.library.LibraryScreen
@@ -40,6 +43,8 @@ import com.nuvio.tv.ui.screens.account.AuthQrSignInScreen
 import com.nuvio.tv.ui.screens.cast.CastDetailScreen
 import com.nuvio.tv.ui.screens.profile.ProfileSelectionMode
 import com.nuvio.tv.ui.screens.profile.ProfileSelectionScreen
+import com.nuvio.tv.ui.screens.calendar.CalendarScreen
+import com.nuvio.tv.ui.screens.diobot.DiobotScreen
 
 @Composable
 fun NuvioNavHost(
@@ -47,6 +52,11 @@ fun NuvioNavHost(
     startDestination: String = Screen.Home.route,
     hideBuiltInHeaders: Boolean = false
 ) {
+    // Share a single HomeViewModel across Home / Movies / Series routes so catalogs
+    // are loaded once and only the content-type filter changes when switching tabs.
+    val activityViewModelStoreOwner = LocalViewModelStoreOwner.current!!
+    val sharedHomeViewModel: HomeViewModel = hiltViewModel(activityViewModelStoreOwner)
+
     fun isStreamToPlayer(from: String, to: String): Boolean {
         return from.startsWith("stream/") && to.startsWith("player/")
     }
@@ -168,8 +178,12 @@ fun NuvioNavHost(
             }
 
             HomeScreen(
+                viewModel = sharedHomeViewModel,
                 onNavigateToDetail = { itemId, itemType, addonBaseUrl ->
                     navController.navigate(Screen.Detail.createRoute(itemId, itemType, addonBaseUrl))
+                },
+                onNavigateToDetailRoute = { route ->
+                    navController.navigate(route)
                 },
                 onContinueWatchingClick = { item ->
                     navController.navigate(createContinueWatchingRoute(item))
@@ -183,6 +197,38 @@ fun NuvioNavHost(
                     navController.navigate(
                         createContinueWatchingRoute(item, manualSelection = true)
                     )
+                },
+                onNavigateToCatalogSeeAll = { catalogId, addonId, type ->
+                    navController.navigate(Screen.CatalogSeeAll.createRoute(catalogId, addonId, type))
+                }
+            )
+        }
+
+        composable(Screen.HomeMovies.route) {
+            HomeScreen(
+                viewModel = sharedHomeViewModel,
+                contentTypeFilter = "movie",
+                onNavigateToDetail = { itemId, itemType, addonBaseUrl ->
+                    navController.navigate(Screen.Detail.createRoute(itemId, itemType, addonBaseUrl))
+                },
+                onNavigateToDetailRoute = { route ->
+                    navController.navigate(route)
+                },
+                onNavigateToCatalogSeeAll = { catalogId, addonId, type ->
+                    navController.navigate(Screen.CatalogSeeAll.createRoute(catalogId, addonId, type))
+                }
+            )
+        }
+
+        composable(Screen.HomeSeries.route) {
+            HomeScreen(
+                viewModel = sharedHomeViewModel,
+                contentTypeFilter = "series",
+                onNavigateToDetail = { itemId, itemType, addonBaseUrl ->
+                    navController.navigate(Screen.Detail.createRoute(itemId, itemType, addonBaseUrl))
+                },
+                onNavigateToDetailRoute = { route ->
+                    navController.navigate(route)
                 },
                 onNavigateToCatalogSeeAll = { catalogId, addonId, type ->
                     navController.navigate(Screen.CatalogSeeAll.createRoute(catalogId, addonId, type))
@@ -845,6 +891,32 @@ fun NuvioNavHost(
                 showBuiltInHeader = !hideBuiltInHeaders,
                 onNavigateToDetail = { itemId, itemType, addonBaseUrl ->
                     navController.navigate(Screen.Detail.createRoute(itemId, itemType, addonBaseUrl))
+                }
+            )
+        }
+
+        composable(Screen.Calendar.route) {
+            CalendarScreen(
+                showBuiltInHeader = !hideBuiltInHeaders,
+                onNavigateToDetail = { itemId, itemType, addonBaseUrl ->
+                    navController.navigate(Screen.Detail.createRoute(itemId, itemType, addonBaseUrl))
+                }
+            )
+        }
+
+        composable(Screen.Diobot.route) {
+            DiobotScreen(
+                onNavigateToDetail = { itemId, itemType ->
+                    navController.navigate(Screen.Detail.createRoute(itemId, itemType))
+                },
+                onNavigateToStream = { videoId, contentType, title ->
+                    navController.navigate(
+                        Screen.Stream.createRoute(
+                            videoId = videoId,
+                            contentType = contentType,
+                            title = title
+                        )
+                    )
                 }
             )
         }

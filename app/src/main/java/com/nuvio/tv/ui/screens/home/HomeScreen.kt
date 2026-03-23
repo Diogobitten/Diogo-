@@ -61,7 +61,9 @@ private data class HomePosterOptionsTarget(
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel = hiltViewModel(),
+    contentTypeFilter: String? = null,
     onNavigateToDetail: (String, String, String) -> Unit,
+    onNavigateToDetailRoute: (String) -> Unit = { },
     onContinueWatchingClick: (ContinueWatchingItem) -> Unit = { item ->
         onNavigateToDetail(
             when (item) {
@@ -83,10 +85,17 @@ fun HomeScreen(
     val effectiveAutoplayEnabled by viewModel.effectiveAutoplayEnabled.collectAsStateWithLifecycle(
         initialValue = false
     )
+
+    // Apply content type filter when this screen is composed
+    LaunchedEffect(contentTypeFilter) {
+        viewModel.setContentTypeFilter(contentTypeFilter)
+    }
+
     val hasCatalogContent = uiState.catalogRows.any { it.items.isNotEmpty() }
     var hasEnteredCatalogContent by rememberSaveable { mutableStateOf(false) }
     var showHomeContentWithAnimation by rememberSaveable { mutableStateOf(false) }
     var posterOptionsTarget by remember { mutableStateOf<HomePosterOptionsTarget?>(null) }
+    var streamingTypePickerService by remember { mutableStateOf<String?>(null) }
 
     // Stable lambdas — captured via rememberUpdatedState so they never cause
     // downstream recomposition when uiState changes.
@@ -204,13 +213,26 @@ fun HomeScreen(
                                 uiState = uiState,
                                 posterCardStyle = posterCardStyle,
                                 onNavigateToDetail = onNavigateToDetail,
+                                onNavigateToDetailRoute = onNavigateToDetailRoute,
                                 onContinueWatchingClick = onContinueWatchingClick,
                                 onContinueWatchingStartFromBeginning = onContinueWatchingStartFromBeginning,
                                 onContinueWatchingPlayManually = onContinueWatchingPlayManually,
                                 showContinueWatchingManualPlayOption = effectiveAutoplayEnabled,
                                 onNavigateToCatalogSeeAll = onNavigateToCatalogSeeAll,
                                 isCatalogItemWatched = isCatalogItemWatched,
-                                onCatalogItemLongPress = onCatalogItemLongPress
+                                onCatalogItemLongPress = onCatalogItemLongPress,
+                                onStreamingServiceClick = { serviceName ->
+                                    val matchingRows = uiState.catalogRows.filter { it.catalogName.equals(serviceName, ignoreCase = true) }
+                                    val types = matchingRows.map { it.apiType.lowercase() }.distinct()
+                                    if (types.size > 1) {
+                                        streamingTypePickerService = serviceName
+                                    } else {
+                                        val row = matchingRows.firstOrNull()
+                                        if (row != null) {
+                                            onNavigateToCatalogSeeAll(row.catalogId, row.addonId, row.apiType)
+                                        }
+                                    }
+                                }
                             )
 
                             HomeLayout.GRID -> GridHomeRoute(
@@ -218,25 +240,52 @@ fun HomeScreen(
                                 uiState = uiState,
                                 posterCardStyle = posterCardStyle,
                                 onNavigateToDetail = onNavigateToDetail,
+                                onNavigateToDetailRoute = onNavigateToDetailRoute,
                                 onContinueWatchingClick = onContinueWatchingClick,
                                 onContinueWatchingStartFromBeginning = onContinueWatchingStartFromBeginning,
                                 onContinueWatchingPlayManually = onContinueWatchingPlayManually,
                                 showContinueWatchingManualPlayOption = effectiveAutoplayEnabled,
                                 onNavigateToCatalogSeeAll = onNavigateToCatalogSeeAll,
                                 isCatalogItemWatched = isCatalogItemWatched,
-                                onCatalogItemLongPress = onCatalogItemLongPress
+                                onCatalogItemLongPress = onCatalogItemLongPress,
+                                onStreamingServiceClick = { serviceName ->
+                                    val matchingRows = uiState.catalogRows.filter { it.catalogName.equals(serviceName, ignoreCase = true) }
+                                    val types = matchingRows.map { it.apiType.lowercase() }.distinct()
+                                    if (types.size > 1) {
+                                        streamingTypePickerService = serviceName
+                                    } else {
+                                        val row = matchingRows.firstOrNull()
+                                        if (row != null) {
+                                            onNavigateToCatalogSeeAll(row.catalogId, row.addonId, row.apiType)
+                                        }
+                                    }
+                                }
                             )
 
                             HomeLayout.MODERN -> ModernHomeRoute(
                                 viewModel = viewModel,
                                 uiState = uiState,
                                 onNavigateToDetail = onNavigateToDetail,
+                                onNavigateToDetailRoute = onNavigateToDetailRoute,
+                                onNavigateToCatalogSeeAll = onNavigateToCatalogSeeAll,
                                 onContinueWatchingClick = onContinueWatchingClick,
                                 onContinueWatchingStartFromBeginning = onContinueWatchingStartFromBeginning,
                                 onContinueWatchingPlayManually = onContinueWatchingPlayManually,
                                 showContinueWatchingManualPlayOption = effectiveAutoplayEnabled,
                                 isCatalogItemWatched = isCatalogItemWatched,
-                                onCatalogItemLongPress = onCatalogItemLongPress
+                                onCatalogItemLongPress = onCatalogItemLongPress,
+                                onStreamingServiceClick = { serviceName ->
+                                    val matchingRows = uiState.catalogRows.filter { it.catalogName.equals(serviceName, ignoreCase = true) }
+                                    val types = matchingRows.map { it.apiType.lowercase() }.distinct()
+                                    if (types.size > 1) {
+                                        streamingTypePickerService = serviceName
+                                    } else {
+                                        val row = matchingRows.firstOrNull()
+                                        if (row != null) {
+                                            onNavigateToCatalogSeeAll(row.catalogId, row.addonId, row.apiType)
+                                        }
+                                    }
+                                }
                             )
                         }
                     }
@@ -313,6 +362,24 @@ fun HomeScreen(
             onDismiss = { viewModel.dismissPosterListPicker() }
         )
     }
+
+    val pickerService = streamingTypePickerService
+    if (pickerService != null) {
+        StreamingTypePickerDialog(
+            serviceName = pickerService,
+            onSelectType = { selectedType ->
+                val row = uiState.catalogRows.firstOrNull {
+                    it.catalogName.equals(pickerService, ignoreCase = true) &&
+                        it.apiType.equals(selectedType, ignoreCase = true)
+                }
+                if (row != null) {
+                    onNavigateToCatalogSeeAll(row.catalogId, row.addonId, row.apiType)
+                }
+                streamingTypePickerService = null
+            },
+            onDismiss = { streamingTypePickerService = null }
+        )
+    }
 }
 
 @Composable
@@ -321,13 +388,15 @@ private fun ClassicHomeRoute(
     uiState: HomeUiState,
     posterCardStyle: PosterCardStyle,
     onNavigateToDetail: (String, String, String) -> Unit,
+    onNavigateToDetailRoute: (String) -> Unit,
     onContinueWatchingClick: (ContinueWatchingItem) -> Unit,
     onContinueWatchingStartFromBeginning: (ContinueWatchingItem) -> Unit,
     onContinueWatchingPlayManually: (ContinueWatchingItem) -> Unit,
     showContinueWatchingManualPlayOption: Boolean,
     onNavigateToCatalogSeeAll: (String, String, String) -> Unit,
     isCatalogItemWatched: (MetaPreview) -> Boolean,
-    onCatalogItemLongPress: (MetaPreview, String) -> Unit
+    onCatalogItemLongPress: (MetaPreview, String) -> Unit,
+    onStreamingServiceClick: (String) -> Unit
 ) {
     val focusState by viewModel.focusState.collectAsStateWithLifecycle()
     ClassicHomeContent(
@@ -353,6 +422,22 @@ private fun ClassicHomeRoute(
         onItemFocus = { item ->
             viewModel.onItemFocus(item)
         },
+        onNewReleaseClick = { calendarItem ->
+            val type = when (calendarItem.type) {
+                com.nuvio.tv.domain.model.CalendarItemType.EPISODE -> "series"
+                com.nuvio.tv.domain.model.CalendarItemType.MOVIE -> "movie"
+            }
+            val id = calendarItem.imdbId ?: "tmdb:${calendarItem.tmdbId}"
+            onNavigateToDetailRoute(
+                com.nuvio.tv.ui.navigation.Screen.Detail.createRoute(
+                    itemId = id,
+                    itemType = type,
+                    returnFocusSeason = calendarItem.season,
+                    returnFocusEpisode = calendarItem.episode
+                )
+            )
+        },
+        onStreamingServiceClick = onStreamingServiceClick,
         onSaveFocusState = { vi, vo, ri, ii, m ->
             viewModel.saveFocusState(vi, vo, ri, ii, m)
         }
@@ -365,13 +450,15 @@ private fun GridHomeRoute(
     uiState: HomeUiState,
     posterCardStyle: PosterCardStyle,
     onNavigateToDetail: (String, String, String) -> Unit,
+    onNavigateToDetailRoute: (String) -> Unit,
     onContinueWatchingClick: (ContinueWatchingItem) -> Unit,
     onContinueWatchingStartFromBeginning: (ContinueWatchingItem) -> Unit,
     onContinueWatchingPlayManually: (ContinueWatchingItem) -> Unit,
     showContinueWatchingManualPlayOption: Boolean,
     onNavigateToCatalogSeeAll: (String, String, String) -> Unit,
     isCatalogItemWatched: (MetaPreview) -> Boolean,
-    onCatalogItemLongPress: (MetaPreview, String) -> Unit
+    onCatalogItemLongPress: (MetaPreview, String) -> Unit,
+    onStreamingServiceClick: (String) -> Unit
 ) {
     val gridFocusState by viewModel.gridFocusState.collectAsStateWithLifecycle()
     GridHomeContent(
@@ -392,6 +479,22 @@ private fun GridHomeRoute(
         onItemFocus = { item ->
             viewModel.onItemFocus(item)
         },
+        onNewReleaseClick = { calendarItem ->
+            val type = when (calendarItem.type) {
+                com.nuvio.tv.domain.model.CalendarItemType.EPISODE -> "series"
+                com.nuvio.tv.domain.model.CalendarItemType.MOVIE -> "movie"
+            }
+            val id = calendarItem.imdbId ?: "tmdb:${calendarItem.tmdbId}"
+            onNavigateToDetailRoute(
+                com.nuvio.tv.ui.navigation.Screen.Detail.createRoute(
+                    itemId = id,
+                    itemType = type,
+                    returnFocusSeason = calendarItem.season,
+                    returnFocusEpisode = calendarItem.episode
+                )
+            )
+        },
+        onStreamingServiceClick = onStreamingServiceClick,
         onSaveGridFocusState = { vi, vo ->
             viewModel.saveGridFocusState(vi, vo)
         }
@@ -403,12 +506,15 @@ private fun ModernHomeRoute(
     viewModel: HomeViewModel,
     uiState: HomeUiState,
     onNavigateToDetail: (String, String, String) -> Unit,
+    onNavigateToDetailRoute: (String) -> Unit,
+    onNavigateToCatalogSeeAll: (String, String, String) -> Unit,
     onContinueWatchingClick: (ContinueWatchingItem) -> Unit,
     onContinueWatchingStartFromBeginning: (ContinueWatchingItem) -> Unit,
     onContinueWatchingPlayManually: (ContinueWatchingItem) -> Unit,
     showContinueWatchingManualPlayOption: Boolean,
     isCatalogItemWatched: (MetaPreview) -> Boolean,
-    onCatalogItemLongPress: (MetaPreview, String) -> Unit
+    onCatalogItemLongPress: (MetaPreview, String) -> Unit,
+    onStreamingServiceClick: (String) -> Unit
 ) {
     val focusState by viewModel.focusState.collectAsStateWithLifecycle()
     val enrichingItemId by viewModel.enrichingItemId.collectAsStateWithLifecycle()
@@ -457,6 +563,22 @@ private fun ModernHomeRoute(
             { item -> viewModel.onItemFocus(item) }
         },
         onPreloadAdjacentItem = preloadAdjacentItem,
+        onNewReleaseClick = { calendarItem ->
+            val type = when (calendarItem.type) {
+                com.nuvio.tv.domain.model.CalendarItemType.EPISODE -> "series"
+                com.nuvio.tv.domain.model.CalendarItemType.MOVIE -> "movie"
+            }
+            val id = calendarItem.imdbId ?: "tmdb:${calendarItem.tmdbId}"
+            onNavigateToDetailRoute(
+                com.nuvio.tv.ui.navigation.Screen.Detail.createRoute(
+                    itemId = id,
+                    itemType = type,
+                    returnFocusSeason = calendarItem.season,
+                    returnFocusEpisode = calendarItem.episode
+                )
+            )
+        },
+        onStreamingServiceClick = onStreamingServiceClick,
         onSaveFocusState = saveModernFocusState
     )
 }
@@ -622,6 +744,49 @@ private fun HomeLibraryListPickerDialog(
             ) {
                 Text(if (isPending) stringResource(R.string.action_saving) else stringResource(R.string.action_save))
             }
+        }
+    }
+}
+
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun StreamingTypePickerDialog(
+    serviceName: String,
+    onSelectType: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val primaryFocusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        primaryFocusRequester.requestFocus()
+    }
+
+    NuvioDialog(
+        onDismiss = onDismiss,
+        title = serviceName
+    ) {
+        Button(
+            onClick = { onSelectType("movie") },
+            modifier = Modifier
+                .fillMaxWidth()
+                .focusRequester(primaryFocusRequester),
+            colors = ButtonDefaults.colors(
+                containerColor = NuvioColors.BackgroundCard,
+                contentColor = NuvioColors.TextPrimary
+            )
+        ) {
+            Text(stringResource(R.string.type_movie))
+        }
+
+        Button(
+            onClick = { onSelectType("series") },
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.colors(
+                containerColor = NuvioColors.BackgroundCard,
+                contentColor = NuvioColors.TextPrimary
+            )
+        ) {
+            Text(stringResource(R.string.type_series))
         }
     }
 }

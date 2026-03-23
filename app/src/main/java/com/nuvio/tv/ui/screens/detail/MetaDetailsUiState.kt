@@ -26,6 +26,7 @@ data class MetaDetailsUiState(
     val showTrailerControls: Boolean = false,
     val hideLogoDuringTrailer: Boolean = false,
     val trailerButtonEnabled: Boolean = false,
+    val isAmbientTrailer: Boolean = false,
     val librarySourceMode: LibrarySourceMode = LibrarySourceMode.LOCAL,
     val libraryListTabs: List<LibraryListTab> = emptyList(),
     val isInWatchlist: Boolean = false,
@@ -47,7 +48,8 @@ data class MetaDetailsUiState(
     val mdbListRatings: MDBListRatings? = null,
     val showMdbListImdb: Boolean = false,
     val userMessage: String? = null,
-    val userMessageIsError: Boolean = false
+    val userMessageIsError: Boolean = false,
+    val themeSongAudioUrl: String? = null
 )
 
 sealed class MetaDetailsEvent {

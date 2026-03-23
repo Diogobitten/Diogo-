@@ -27,11 +27,14 @@ class TrailerService @Inject constructor(
     private val tmdbSettingsDataStore: TmdbSettingsDataStore,
     private val tmdbService: TmdbService
 ) {
-    // Cache: "title|year|tmdbId|type" -> trailer playback source (NEGATIVE_CACHE sentinel for misses)
-    private val cache = ConcurrentHashMap<String, TrailerPlaybackSource>()
+    // Cache: "title|year|tmdbId|type" -> trailer playback source with timestamp (NEGATIVE_CACHE sentinel for misses)
+    private data class CachedPlayback(val source: TrailerPlaybackSource, val cachedAt: Long)
+    private val cache = ConcurrentHashMap<String, CachedPlayback>()
     private val NEGATIVE_CACHE = TrailerPlaybackSource(videoUrl = "")
-    // Session cache: youtubeVideoId -> resolved playback source (success-only)
-    private val youtubeSourceCache = ConcurrentHashMap<String, TrailerPlaybackSource>()
+    // Session cache: youtubeVideoId -> resolved playback source (success-only) with timestamp
+    private data class CachedSource(val source: TrailerPlaybackSource, val cachedAt: Long)
+    private val youtubeSourceCache = ConcurrentHashMap<String, CachedSource>()
+    private val YOUTUBE_CACHE_TTL_MS = 2 * 60 * 60 * 1000L // 2 hours
 
     /**
      * Search for a trailer by title, year, tmdbId, and type.
@@ -46,9 +49,14 @@ class TrailerService @Inject constructor(
         val cacheKey = "$title|$year|$tmdbId|$type"
 
         cache[cacheKey]?.let { cached ->
-            val hit = cached !== NEGATIVE_CACHE
-            Log.d(TAG, "Cache hit for $cacheKey: $hit")
-            return@withContext if (hit) cached else null
+            if (System.currentTimeMillis() - cached.cachedAt < YOUTUBE_CACHE_TTL_MS) {
+                val hit = cached.source !== NEGATIVE_CACHE
+                Log.d(TAG, "Cache hit for $cacheKey: $hit")
+                return@withContext if (hit) cached.source else null
+            } else {
+                Log.d(TAG, "Cache expired for $cacheKey")
+                cache.remove(cacheKey)
+            }
         }
 
         try {
@@ -62,11 +70,11 @@ class TrailerService @Inject constructor(
                 year = year
             )
             if (tmdbSource != null) {
-                cache[cacheKey] = tmdbSource
+                cache[cacheKey] = CachedPlayback(tmdbSource, System.currentTimeMillis())
                 return@withContext tmdbSource
             }
             Log.w(TAG, "TMDB path exhausted; no YouTube trailer key resolved for backend /trailer fallback")
-            cache[cacheKey] = NEGATIVE_CACHE
+            cache[cacheKey] = CachedPlayback(NEGATIVE_CACHE, System.currentTimeMillis())
             null
         } catch (e: Exception) {
             Log.e(TAG, "Error fetching trailer for $title: ${e.message}", e)
@@ -157,8 +165,13 @@ class TrailerService @Inject constructor(
             val youtubeKey = extractYouTubeVideoId(youtubeUrl)
             if (!youtubeKey.isNullOrBlank()) {
                 youtubeSourceCache[youtubeKey]?.let { cached ->
-                    Log.d(TAG, "YouTube session cache hit for key=${obfuscateYoutubeKey(youtubeKey)}")
-                    return@withContext cached
+                    if (System.currentTimeMillis() - cached.cachedAt < YOUTUBE_CACHE_TTL_MS) {
+                        Log.d(TAG, "YouTube session cache hit for key=${obfuscateYoutubeKey(youtubeKey)}")
+                        return@withContext cached.source
+                    } else {
+                        Log.d(TAG, "YouTube session cache expired for key=${obfuscateYoutubeKey(youtubeKey)}")
+                        youtubeSourceCache.remove(youtubeKey)
+                    }
                 }
             }
 
@@ -166,7 +179,7 @@ class TrailerService @Inject constructor(
             val localSource = inAppYouTubeExtractor.extractPlaybackSource(youtubeUrl)
             if (localSource != null) {
                 if (!youtubeKey.isNullOrBlank()) {
-                    youtubeSourceCache[youtubeKey] = localSource
+                    youtubeSourceCache[youtubeKey] = CachedSource(localSource, System.currentTimeMillis())
                 }
                 Log.d(
                     TAG,
@@ -188,7 +201,7 @@ class TrailerService @Inject constructor(
             if (!isValidUrl(fallbackUrl)) return@withContext null
 
             if (!youtubeKey.isNullOrBlank()) {
-                youtubeSourceCache[youtubeKey] = TrailerPlaybackSource(videoUrl = fallbackUrl)
+                youtubeSourceCache[youtubeKey] = CachedSource(TrailerPlaybackSource(videoUrl = fallbackUrl), System.currentTimeMillis())
             }
             Log.d(TAG, "Using backend fallback source for ${summarizeUrl(youtubeUrl)}")
             TrailerPlaybackSource(videoUrl = fallbackUrl)

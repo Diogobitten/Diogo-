@@ -29,6 +29,7 @@ import com.nuvio.tv.domain.repository.WatchProgressRepository
 import com.nuvio.tv.data.local.WatchedItemsPreferences
 import com.nuvio.tv.data.local.TrailerSettingsDataStore
 import com.nuvio.tv.data.trailer.TrailerService
+import com.nuvio.tv.data.themesong.ThemeSongService
 import com.nuvio.tv.core.util.isUnreleased
 import java.time.LocalDate
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -68,6 +69,7 @@ class MetaDetailsViewModel @Inject constructor(
     private val watchProgressRepository: WatchProgressRepository,
     private val watchedItemsPreferences: WatchedItemsPreferences,
     private val trailerService: TrailerService,
+    private val themeSongService: ThemeSongService,
     private val trailerSettingsDataStore: TrailerSettingsDataStore,
     private val layoutPreferenceDataStore: LayoutPreferenceDataStore,
     private val playerSettingsDataStore: PlayerSettingsDataStore,
@@ -85,10 +87,12 @@ class MetaDetailsViewModel @Inject constructor(
 
     private var idleTimerJob: Job? = null
     private var trailerFetchJob: Job? = null
+    private var themeSongFetchJob: Job? = null
     private var moreLikeThisJob: Job? = null
     private var collectionJob: Job? = null
     private var episodeRatingsJob: Job? = null
     private var nextToWatchJob: Job? = null
+    private var ambientTrailerJob: Job? = null
 
     private var trailerDelayMs = 7000L
     private var trailerAutoplayEnabled = false
@@ -465,16 +469,20 @@ class MetaDetailsViewModel @Inject constructor(
 
         // Start fetching trailer after meta is loaded
         fetchTrailerUrl()
+
+        // Start fetching theme song audio in parallel
+        fetchThemeSong()
     }
 
     private suspend fun applyMetaWithEnrichment(meta: Meta) {
         // Fire all independent async jobs immediately — they run in parallel.
         loadMoreLikeThisAsync(meta)
+        // MDBList ratings don't depend on enrichment — launch early.
+        viewModelScope.launch { loadMDBListRatings(meta) }
         val enriched = enrichMeta(meta)
         applyMeta(enriched)
-        // Episode ratings and MDBList are independent — launch both without waiting.
+        // Episode ratings need enriched meta for accurate TMDB ID resolution.
         loadEpisodeRatingsAsync(enriched)
-        viewModelScope.launch { loadMDBListRatings(enriched) }
     }
 
     private fun loadMoreLikeThisAsync(meta: Meta) {
@@ -1450,6 +1458,28 @@ class MetaDetailsViewModel @Inject constructor(
         return nextToWatch?.displayText
     }
 
+    // --- Theme Song ---
+
+    private fun fetchThemeSong() {
+        themeSongFetchJob?.cancel()
+        themeSongFetchJob = viewModelScope.launch {
+            val audioUrl = try {
+                themeSongService.getThemeSongAudioUrl(
+                    itemId = itemId,
+                    itemType = itemType
+                )
+            } catch (e: Exception) {
+                Log.w(TAG, "Theme song fetch failed: ${e.message}")
+                null
+            }
+
+            _uiState.update { state ->
+                if (state.themeSongAudioUrl == audioUrl) state
+                else state.copy(themeSongAudioUrl = audioUrl)
+            }
+        }
+    }
+
     // --- Trailer ---
 
     private fun fetchTrailerUrl() {
@@ -1505,6 +1535,59 @@ class MetaDetailsViewModel @Inject constructor(
             if (url != null && isPlayButtonFocused) {
                 startIdleTimer()
             }
+            if (url != null) {
+                startAmbientTrailerCycle()
+            }
+        }
+    }
+
+    private fun startAmbientTrailerCycle() {
+        ambientTrailerJob?.cancel()
+        val state = _uiState.value
+        if (state.trailerUrl == null) return
+        // Don't start ambient if manual trailer is already playing
+        if (state.isTrailerPlaying && !state.isAmbientTrailer) return
+
+        ambientTrailerJob = viewModelScope.launch {
+            while (true) {
+                // Wait 3s showing backdrop
+                delay(3000L)
+                // Check if manual trailer took over
+                if (_uiState.value.isTrailerPlaying && !_uiState.value.isAmbientTrailer) break
+                // Start ambient trailer (muted, no controls, no logo hide)
+                _uiState.update { s ->
+                    s.copy(
+                        isTrailerPlaying = true,
+                        isAmbientTrailer = true,
+                        showTrailerControls = false,
+                        hideLogoDuringTrailer = false
+                    )
+                }
+                // Play for 60s
+                delay(60_000L)
+                // Check if manual trailer took over during playback
+                if (_uiState.value.isTrailerPlaying && !_uiState.value.isAmbientTrailer) break
+                // Stop trailer, show backdrop again
+                _uiState.update { s ->
+                    s.copy(
+                        isTrailerPlaying = false,
+                        isAmbientTrailer = false
+                    )
+                }
+            }
+        }
+    }
+
+    private fun stopAmbientTrailerCycle() {
+        ambientTrailerJob?.cancel()
+        ambientTrailerJob = null
+        if (_uiState.value.isAmbientTrailer) {
+            _uiState.update { s ->
+                s.copy(
+                    isTrailerPlaying = false,
+                    isAmbientTrailer = false
+                )
+            }
         }
     }
 
@@ -1535,7 +1618,7 @@ class MetaDetailsViewModel @Inject constructor(
 
     private fun handleUserInteraction() {
         val state = _uiState.value
-        val shouldStopAutoTrailer = state.isTrailerPlaying && !state.showTrailerControls
+        val shouldStopAutoTrailer = state.isTrailerPlaying && !state.showTrailerControls && !state.isAmbientTrailer
         val hasActiveIdleTimer = idleTimerJob?.isActive == true
         if (!isPlayButtonFocused && !hasActiveIdleTimer && !shouldStopAutoTrailer) {
             return
@@ -1557,6 +1640,7 @@ class MetaDetailsViewModel @Inject constructor(
     private fun handleTrailerButtonClick() {
         val state = _uiState.value
         if (state.trailerUrl.isNullOrBlank()) return
+        stopAmbientTrailerCycle()
         idleTimerJob?.cancel()
         isPlayButtonFocused = false
         setTrailerPlaybackState(
@@ -1567,6 +1651,7 @@ class MetaDetailsViewModel @Inject constructor(
     }
 
     private fun handleTrailerEnded() {
+        val wasAmbient = _uiState.value.isAmbientTrailer
         trailerHasPlayed = true
         isPlayButtonFocused = false
         setTrailerPlaybackState(
@@ -1574,12 +1659,19 @@ class MetaDetailsViewModel @Inject constructor(
             showControls = false,
             hideLogo = false
         )
+        _uiState.update { it.copy(isAmbientTrailer = false) }
+        // Restart ambient cycle after any trailer ends
+        if (_uiState.value.trailerUrl != null) {
+            startAmbientTrailerCycle()
+        }
     }
 
     override fun onCleared() {
         super.onCleared()
         idleTimerJob?.cancel()
         trailerFetchJob?.cancel()
+        themeSongFetchJob?.cancel()
         nextToWatchJob?.cancel()
+        ambientTrailerJob?.cancel()
     }
 }

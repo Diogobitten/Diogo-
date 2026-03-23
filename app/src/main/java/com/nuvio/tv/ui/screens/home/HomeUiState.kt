@@ -3,6 +3,7 @@ package com.nuvio.tv.ui.screens.home
 import androidx.compose.runtime.Immutable
 import com.nuvio.tv.data.local.StartupAuthNotice
 import com.nuvio.tv.domain.model.CatalogRow
+import com.nuvio.tv.domain.model.CalendarItem
 import com.nuvio.tv.domain.model.FocusedPosterTrailerPlaybackTarget
 import com.nuvio.tv.domain.model.HomeLayout
 import com.nuvio.tv.domain.model.LibraryListTab
@@ -13,6 +14,7 @@ import com.nuvio.tv.domain.model.WatchProgress
 @Immutable
 data class HomeUiState(
     val catalogRows: List<CatalogRow> = emptyList(),
+    val newReleases: List<CalendarItem> = emptyList(),
     val continueWatchingItems: List<ContinueWatchingItem> = emptyList(),
     val isLoading: Boolean = true,
     val error: String? = null,
@@ -48,7 +50,9 @@ data class HomeUiState(
     val posterListPickerError: String? = null,
     val gridItems: List<GridItem> = emptyList(),
     val hideUnreleasedContent: Boolean = false,
-    val startupAuthNotice: StartupAuthNotice? = null
+    val startupAuthNotice: StartupAuthNotice? = null,
+    val streamingServiceNames: List<String> = emptyList(),
+    val streamingServiceAddonName: String? = null
 )
 
 @Immutable

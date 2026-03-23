@@ -1,6 +1,10 @@
 package com.nuvio.tv.ui.components
 
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
@@ -28,11 +32,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -67,6 +76,7 @@ fun HeroCarousel(
     onItemFocus: (MetaPreview) -> Unit = {},
     focusRequester: FocusRequester? = null,
     fullWidth: Dp = Dp.Unspecified,
+    contentStartPadding: Dp = 48.dp,
     modifier: Modifier = Modifier
 ) {
     if (items.isEmpty()) return
@@ -75,7 +85,6 @@ fun HeroCarousel(
     var isFocused by remember { mutableStateOf(false) }
 
     LaunchedEffect(activeIndex, isFocused) {
-        if (!isFocused) return@LaunchedEffect
         items.getOrNull(activeIndex)?.let { onItemFocus(it) }
     }
 
@@ -130,14 +139,17 @@ fun HeroCarousel(
                 }
             }
     ) {
-        // Crossfade between slides
+        // Crossfade between slides — key on item ID for stability during enrichment updates
+        val currentItem = items.getOrNull(activeIndex)
         Crossfade(
-            targetState = activeIndex,
+            targetState = currentItem?.id ?: activeIndex.toString(),
             animationSpec = tween(300),
             label = "heroSlide"
-        ) { index ->
-            val item = items.getOrNull(index) ?: return@Crossfade
-            HeroCarouselSlide(item = item)
+        ) { targetId ->
+            val item = items.firstOrNull { it.id == targetId }
+                ?: items.getOrNull(activeIndex)
+                ?: return@Crossfade
+            HeroCarouselSlide(item = item, contentStartPadding = contentStartPadding)
         }
 
         // Indicator dots — pre-compute colors + shape to avoid reallocation per dot
@@ -147,8 +159,8 @@ fun HeroCarousel(
         val dotShape = remember { RoundedCornerShape(3.dp) }
         Row(
             modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 16.dp),
+                .align(Alignment.BottomStart)
+                .padding(start = contentStartPadding + 140.dp, bottom = 24.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items.forEachIndexed { index, _ ->
@@ -181,7 +193,8 @@ fun HeroCarousel(
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 private fun HeroCarouselSlide(
-    item: MetaPreview
+    item: MetaPreview,
+    contentStartPadding: Dp = 48.dp
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -192,18 +205,22 @@ private fun HeroCarouselSlide(
     val requestHeightPx = remember(density) { with(density) { 400.dp.roundToPx() } }
     val logoRequestHeightPx = remember(density) { with(density) { 80.dp.roundToPx() } }
     val backdropUrl = item.backdropUrl
-    val backgroundModel = remember(context, backdropUrl, requestWidthPx, requestHeightPx) {
+    val backgroundModel = remember(backdropUrl, requestWidthPx, requestHeightPx) {
         ImageRequest.Builder(context)
             .data(backdropUrl)
             .crossfade(false)
+            .allowHardware(true)
+            .memoryCacheKey("hero_bg_${backdropUrl}_${requestWidthPx}x${requestHeightPx}")
             .size(width = requestWidthPx, height = requestHeightPx)
             .build()
     }
-    val logoModel = remember(context, item.logo, requestWidthPx, logoRequestHeightPx) {
+    val logoModel = remember(item.logo, requestWidthPx, logoRequestHeightPx) {
         item.logo?.let {
             ImageRequest.Builder(context)
                 .data(it)
                 .crossfade(false)
+                .allowHardware(true)
+                .memoryCacheKey("hero_logo_${it}_${requestWidthPx}x${logoRequestHeightPx}")
                 .size(width = requestWidthPx, height = logoRequestHeightPx)
                 .build()
         }
@@ -212,161 +229,170 @@ private fun HeroCarouselSlide(
     val showLogo = !item.logo.isNullOrBlank() && !logoLoadFailed
 
     val bgColor = NuvioColors.Background
-    val bottomGradient = remember(bgColor) {
-        Brush.verticalGradient(
-            colorStops = arrayOf(
-                0.0f to Color.Transparent,
-                0.3f to Color.Transparent,
-                0.6f to bgColor.copy(alpha = 0.5f),
-                0.8f to bgColor.copy(alpha = 0.85f),
-                1.0f to bgColor
-            )
-        )
-    }
-    val leftGradient = remember(bgColor) {
-        Brush.horizontalGradient(
-            colorStops = arrayOf(
-                0.0f to bgColor.copy(alpha = 0.98f),
-                0.16f to bgColor.copy(alpha = 0.88f),
-                0.34f to bgColor.copy(alpha = 0.56f),
-                0.56f to bgColor.copy(alpha = 0.20f),
-                0.72f to Color.Transparent,
-                1.0f to Color.Transparent
-            )
-        )
-    }
 
     Box(
-        modifier = Modifier.fillMaxSize()
+        modifier = Modifier
+            .fillMaxSize()
     ) {
-        // Background image
-        AsyncImage(
-            model = backgroundModel,
-            contentDescription = item.name,
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop,
-            alignment = Alignment.TopCenter
+        // ── LAYER 1: Background image with alpha-faded edges ──
+        // Uses Offscreen compositing + DstIn blend to make edges transparent
+        val zoomTransition = rememberInfiniteTransition(label = "heroCarouselZoom")
+        val zoomScale by zoomTransition.animateFloat(
+            initialValue = 1.0f,
+            targetValue = 1.08f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 10_000),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "heroCarouselZoomScale"
         )
 
-        // Bottom gradient for text readability
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(bottomGradient)
-        )
+                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                .drawWithContent {
+                    drawContent()
+                    // Left edge fade: solid → transparent
+                    drawRect(
+                        brush = Brush.horizontalGradient(
+                            colors = listOf(Color.Transparent, Color.Black),
+                            startX = 0f,
+                            endX = size.width * 0.35f
+                        ),
+                        blendMode = BlendMode.DstIn
+                    )
+                    // Bottom edge fade: solid → transparent
+                    drawRect(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(Color.Black, Color.Transparent),
+                            startY = size.height * 0.55f,
+                            endY = size.height
+                        ),
+                        blendMode = BlendMode.DstIn
+                    )
+                }
+                .clipToBounds()
+        ) {
+            AsyncImage(
+                model = backgroundModel,
+                contentDescription = item.name,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        scaleX = zoomScale
+                        scaleY = zoomScale
+                    },
+                contentScale = ContentScale.Crop,
+                alignment = Alignment.TopCenter
+            )
+        }
 
-        // Left gradient for extra text readability
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(leftGradient)
-        )
-
-        // Content overlay
+        // ── LAYER 2: Content (text, metadata) ──
         Column(
             modifier = Modifier
                 .align(Alignment.BottomStart)
-                .padding(start = 48.dp, bottom = 48.dp, end = 48.dp)
-                .fillMaxWidth(0.5f)
+                .padding(start = contentStartPadding + 140.dp, bottom = 48.dp, end = 120.dp)
+                .fillMaxWidth(0.45f)
         ) {
-            // Title logo or text title
-            if (showLogo) {
-                AsyncImage(
-                    model = logoModel,
-                    contentDescription = item.name,
-                    onError = { logoLoadFailed = true },
-                    modifier = Modifier
-                        .height(80.dp)
-                        .fillMaxWidth(),
-                    contentScale = ContentScale.Fit,
-                    alignment = Alignment.CenterStart
-                )
-            } else {
-                Text(
-                    text = item.name,
-                    style = MaterialTheme.typography.headlineLarge,
-                    color = Color.White,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
+                // Title logo or text title
+                if (showLogo) {
+                    AsyncImage(
+                        model = logoModel,
+                        contentDescription = item.name,
+                        onError = { logoLoadFailed = true },
+                        modifier = Modifier
+                            .height(56.dp)
+                            .fillMaxWidth(0.55f),
+                        contentScale = ContentScale.Fit,
+                        alignment = Alignment.CenterStart
+                    )
+                } else {
+                    Text(
+                        text = item.name,
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = Color.White,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
 
-            Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
-            // Meta info row: IMDB rating + year + genres
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                item.imdbRating?.let { rating ->
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        val imdbModel = remember(context) {
-                            ImageRequest.Builder(context)
-                                .data(com.nuvio.tv.R.raw.imdb_logo_2016)
-                                .decoderFactory(SvgDecoder.Factory())
-                                .build()
+                // Meta info row: IMDB rating + year
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    item.imdbRating?.let { rating ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            val imdbModel = remember(context) {
+                                ImageRequest.Builder(context)
+                                    .data(com.nuvio.tv.R.raw.imdb_logo_2016)
+                                    .decoderFactory(SvgDecoder.Factory())
+                                    .build()
+                            }
+                            AsyncImage(
+                                model = imdbModel,
+                                contentDescription = "IMDB",
+                                modifier = Modifier.size(24.dp),
+                                contentScale = ContentScale.Fit
+                            )
+                            val ratingText = remember(rating) { String.format("%.1f", rating) }
+                            Text(
+                                text = ratingText,
+                                style = MaterialTheme.typography.labelLarge,
+                                color = Color.White.copy(alpha = 0.8f)
+                            )
                         }
-                        AsyncImage(
-                            model = imdbModel,
-                            contentDescription = "IMDB",
-                            modifier = Modifier.size(30.dp),
-                            contentScale = ContentScale.Fit
-                        )
-                        val ratingText = remember(rating) { String.format("%.1f", rating) }
+                    }
+
+                    val releaseYear = remember(item.releaseInfo) {
+                        item.releaseInfo?.let { releaseInfo ->
+                            YEAR_REGEX.find(releaseInfo)?.value ?: releaseInfo.split("-").firstOrNull()
+                        }?.trim()?.takeIf { it.isNotEmpty() }
+                    }
+                    releaseYear?.let { year ->
                         Text(
-                            text = ratingText,
+                            text = year,
                             style = MaterialTheme.typography.labelLarge,
                             color = Color.White.copy(alpha = 0.8f)
                         )
                     }
                 }
 
-                val releaseYear = remember(item.releaseInfo) {
-                    item.releaseInfo?.let { releaseInfo ->
-                        YEAR_REGEX.find(releaseInfo)?.value ?: releaseInfo.split("-").firstOrNull()
-                    }?.trim()?.takeIf { it.isNotEmpty() }
-                }
-                releaseYear?.let { year ->
-                    Text(
-                        text = year,
-                        style = MaterialTheme.typography.labelLarge,
-                        color = Color.White.copy(alpha = 0.8f)
-                    )
-                }
-            }
-
-            if (item.genres.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(6.dp))
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    item.genres.take(3).forEach { genre ->
-                        Text(
-                            text = genre,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = Color.White.copy(alpha = 0.7f),
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(Color.White.copy(alpha = 0.1f))
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
-                        )
+                if (item.genres.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        item.genres.take(3).forEach { genre ->
+                            Text(
+                                text = genre,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = Color.White.copy(alpha = 0.7f),
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(Color.White.copy(alpha = 0.1f))
+                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
                     }
                 }
-            }
 
-            item.description?.let { desc ->
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = desc,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.7f),
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
+                item.description?.let { desc ->
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = desc,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White.copy(alpha = 0.7f),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
         }
     }
 }

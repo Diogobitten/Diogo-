@@ -6,6 +6,7 @@
 package com.nuvio.tv.ui.screens.home
 
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.snap
@@ -32,6 +33,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListPrefetchStrategy
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -63,6 +65,8 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
@@ -96,17 +100,19 @@ import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.ui.components.ContinueWatchingCard
 import com.nuvio.tv.ui.components.ContinueWatchingOptionsDialog
 import com.nuvio.tv.ui.components.MonochromePosterPlaceholder
+import com.nuvio.tv.ui.components.StreamingServicesRow
 import com.nuvio.tv.ui.components.TrailerPlayer
 import com.nuvio.tv.LocalSidebarExpanded
 import com.nuvio.tv.LocalContentFocusRequester
 import com.nuvio.tv.ui.theme.NuvioColors
+import com.nuvio.tv.ui.util.rememberDominantColor
 import kotlinx.coroutines.delay
 import android.view.KeyEvent as AndroidKeyEvent
 import kotlinx.coroutines.flow.distinctUntilChanged
 
 private const val KEY_REPEAT_THROTTLE_MS = 80L
-private const val MODERN_HERO_RAPID_NAV_THRESHOLD_MS = 130L
-private const val MODERN_HERO_RAPID_NAV_SETTLE_MS = 170L
+private const val MODERN_HERO_RAPID_NAV_THRESHOLD_MS = 200L
+private const val MODERN_HERO_RAPID_NAV_SETTLE_MS = 250L
 
 @Composable
 fun ModernHomeContent(
@@ -127,6 +133,8 @@ fun ModernHomeContent(
     onCatalogItemLongPress: (MetaPreview, String) -> Unit = { _, _ -> },
     onItemFocus: (MetaPreview) -> Unit = {},
     onPreloadAdjacentItem: (MetaPreview) -> Unit = {},
+    onNewReleaseClick: (com.nuvio.tv.domain.model.CalendarItem) -> Unit = {},
+    onStreamingServiceClick: (String) -> Unit = {},
     onSaveFocusState: (Int, Int, Int, Int, Map<String, Int>) -> Unit
 ) {
     val defaultBringIntoViewSpec = LocalBringIntoViewSpec.current
@@ -158,10 +166,12 @@ fun ModernHomeContent(
     val strUpcoming = stringResource(R.string.cw_upcoming)
     val strTypeMovie = stringResource(R.string.type_movie)
     val strTypeSeries = stringResource(R.string.type_series)
+    val strNewReleases = stringResource(R.string.new_releases)
     val rowBuildCache = remember { ModernCarouselRowBuildCache() }
     val context = LocalContext.current
     val carouselRows = remember(
         uiState.continueWatchingItems,
+        uiState.newReleases,
         visibleCatalogRows,
         useLandscapePosters,
         showCatalogTypeSuffixInModern,
@@ -170,6 +180,70 @@ fun ModernHomeContent(
     ) {
         buildList {
             val activeCatalogKeys = LinkedHashSet<String>(visibleCatalogRows.size)
+
+            // New Releases row (before continue watching)
+            if (uiState.newReleases.isNotEmpty()) {
+                add(
+                    HeroCarouselRow(
+                        key = "new_releases",
+                        title = strNewReleases,
+                        globalRowIndex = -2,
+                        items = uiState.newReleases.map { calendarItem ->
+                            val isSeries = calendarItem.type == com.nuvio.tv.domain.model.CalendarItemType.EPISODE
+                            val badgeText = when {
+                                isSeries && calendarItem.episode == 1 -> context.getString(R.string.new_releases_new_season)
+                                isSeries -> context.getString(R.string.new_releases_new_episode)
+                                else -> context.getString(R.string.new_releases_new)
+                            }
+                            val subtitle = when {
+                                isSeries && calendarItem.season != null && calendarItem.episode != null ->
+                                    "S${calendarItem.season}E${calendarItem.episode}"
+                                else -> badgeText
+                            }
+                            val itemType = if (isSeries) "series" else "movie"
+                            val itemId = calendarItem.imdbId ?: "tmdb:${calendarItem.tmdbId}"
+                            ModernCarouselItem(
+                                key = "nr_${calendarItem.id}",
+                                title = calendarItem.showName ?: calendarItem.title,
+                                subtitle = subtitle,
+                                imageUrl = if (useLandscapePosters) {
+                                    calendarItem.backdrop ?: calendarItem.poster
+                                } else {
+                                    calendarItem.poster ?: calendarItem.backdrop
+                                },
+                                heroPreview = HeroPreview(
+                                    title = calendarItem.showName ?: calendarItem.title,
+                                    logo = null,
+                                    description = calendarItem.episodeName,
+                                    contentTypeText = badgeText,
+                                    isSeries = isSeries,
+                                    yearText = calendarItem.year?.toString(),
+                                    imdbText = null,
+                                    genres = emptyList(),
+                                    poster = calendarItem.poster,
+                                    backdrop = calendarItem.backdrop,
+                                    imageUrl = if (useLandscapePosters) {
+                                        calendarItem.backdrop ?: calendarItem.poster
+                                    } else {
+                                        calendarItem.poster ?: calendarItem.backdrop
+                                    }
+                                ),
+                                payload = ModernPayload.Catalog(
+                                    focusKey = "nr::${calendarItem.id}",
+                                    itemId = itemId,
+                                    itemType = itemType,
+                                    addonBaseUrl = "",
+                                    trailerTitle = calendarItem.showName ?: calendarItem.title,
+                                    trailerReleaseInfo = calendarItem.date,
+                                    trailerApiType = itemType
+                                )
+                            )
+                        }
+                    )
+                )
+            }
+
+            // Continue Watching row
             if (uiState.continueWatchingItems.isNotEmpty()) {
                 val reuseContinueWatchingRow =
                     rowBuildCache.continueWatchingRow != null &&
@@ -323,9 +397,11 @@ fun ModernHomeContent(
     val activeRowKeys = carouselLookups.activeRowKeys
     val activeItemKeysByRow = carouselLookups.activeItemKeysByRow
     val activeCatalogItemIds = carouselLookups.activeCatalogItemIds
+    val nestedPrefetchStrategy = remember { LazyListPrefetchStrategy(nestedPrefetchItemCount = 5) }
     val verticalRowListState = rememberLazyListState(
         initialFirstVisibleItemIndex = focusState.verticalScrollIndex,
-        initialFirstVisibleItemScrollOffset = focusState.verticalScrollOffset
+        initialFirstVisibleItemScrollOffset = focusState.verticalScrollOffset,
+        prefetchStrategy = nestedPrefetchStrategy
     )
     val isVerticalRowsScrolling by remember(verticalRowListState) {
         derivedStateOf { verticalRowListState.isScrollInProgress }
@@ -690,6 +766,15 @@ fun ModernHomeContent(
             }
         }
         val bgColor = NuvioColors.Background
+        val dominantColor = rememberDominantColor(
+            imageUrl = heroBackdrop,
+            context = context
+        )
+        val animatedDominantColor by animateColorAsState(
+            targetValue = dominantColor,
+            animationSpec = tween(durationMillis = 800),
+            label = "dominantColorAnim"
+        )
         val contentFocusRequester = LocalContentFocusRequester.current
         val focusRestorerRequester by remember(carouselRows, uiCaches) {
             derivedStateOf {
@@ -720,6 +805,24 @@ fun ModernHomeContent(
                 .fillMaxWidth(MODERN_HERO_MEDIA_WIDTH_FRACTION)
                 .height(heroBackdropHeight)
         }
+
+        // Ambient dominant color glow behind content
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(
+                            animatedDominantColor.copy(alpha = 0.85f),
+                            animatedDominantColor.copy(alpha = 0.55f),
+                            animatedDominantColor.copy(alpha = 0.2f),
+                            bgColor
+                        ),
+                        center = Offset(maxWidth.value * 0.7f, maxHeight.value * 0.25f),
+                        radius = maxWidth.value * 1.8f
+                    )
+                )
+        )
 
         ModernHeroMediaLayer(
             heroBackdrop = heroBackdrop,
@@ -777,6 +880,15 @@ fun ModernHomeContent(
                 contentPadding = PaddingValues(bottom = rowsViewportHeight),
                 verticalArrangement = Arrangement.spacedBy(24.dp)
             ) {
+                if (uiState.streamingServiceNames.isNotEmpty()) {
+                    item(key = "streaming_services", contentType = "streaming_services") {
+                        StreamingServicesRow(
+                            serviceNames = uiState.streamingServiceNames,
+                            onServiceClick = onStreamingServiceClick
+                        )
+                    }
+                }
+
                 itemsIndexed(
                     items = carouselRows,
                     key = { _, row -> row.key },

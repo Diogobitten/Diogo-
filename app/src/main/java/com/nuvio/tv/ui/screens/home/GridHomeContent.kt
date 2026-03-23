@@ -15,7 +15,9 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -57,12 +59,23 @@ import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.ui.components.GridContentCard
 import com.nuvio.tv.ui.components.GridContinueWatchingSection
 import com.nuvio.tv.ui.components.HeroCarousel
+import com.nuvio.tv.ui.components.NewReleasesSection
 import com.nuvio.tv.ui.components.PosterCardDefaults
 import com.nuvio.tv.ui.components.PosterCardStyle
+import com.nuvio.tv.ui.components.StreamingServicesRow
 import com.nuvio.tv.ui.theme.NuvioColors
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.Dp
+import com.nuvio.tv.ui.util.rememberDominantColor
+
 /** Minimum interval between processed key repeat events to prevent HWUI overload. */
-private const val KEY_REPEAT_THROTTLE_MS = 80L
+private const val KEY_REPEAT_THROTTLE_MS = 120L
 
 @OptIn(ExperimentalTvMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -80,6 +93,8 @@ fun GridHomeContent(
     onCatalogItemLongPress: (MetaPreview, String) -> Unit = { _, _ -> },
     posterCardStyle: PosterCardStyle = PosterCardDefaults.Style,
     onItemFocus: (com.nuvio.tv.domain.model.MetaPreview) -> Unit = {},
+    onNewReleaseClick: (com.nuvio.tv.domain.model.CalendarItem) -> Unit = {},
+    onStreamingServiceClick: (String) -> Unit = {},
     onSaveGridFocusState: (Int, Int) -> Unit
 ) {
     val gridState = rememberLazyGridState(
@@ -166,6 +181,59 @@ fun GridHomeContent(
 
     Box(modifier = Modifier.fillMaxSize()) {
         val contentFocusRequester = LocalContentFocusRequester.current
+        val context = LocalContext.current
+
+        // Track focused hero item for dominant color extraction
+        var focusedHeroBackdrop by remember { mutableStateOf<String?>(null) }
+
+        // Initialize with first hero item backdrop
+        LaunchedEffect(gridItems) {
+            if (focusedHeroBackdrop == null) {
+                val heroItem = gridItems.filterIsInstance<GridItem.Hero>().firstOrNull()
+                focusedHeroBackdrop = heroItem?.items?.firstOrNull()?.backdropUrl
+            }
+        }
+
+        val dominantColor = rememberDominantColor(
+            imageUrl = focusedHeroBackdrop,
+            context = context
+        )
+        val animatedDominantColor by animateColorAsState(
+            targetValue = dominantColor,
+            animationSpec = tween(durationMillis = 800),
+            label = "gridDominantColorAnim"
+        )
+
+        // Fundo radial completo - corrigido para não cortar à direita
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.radialGradient(
+                        colorStops = arrayOf(
+                            0.00f to animatedDominantColor.copy(alpha = 0.50f),
+                            0.05f to animatedDominantColor.copy(alpha = 0.46f),
+                            0.10f to animatedDominantColor.copy(alpha = 0.42f),
+                            0.15f to animatedDominantColor.copy(alpha = 0.37f),
+                            0.20f to animatedDominantColor.copy(alpha = 0.32f),
+                            0.25f to animatedDominantColor.copy(alpha = 0.27f),
+                            0.30f to animatedDominantColor.copy(alpha = 0.23f),
+                            0.35f to animatedDominantColor.copy(alpha = 0.19f),
+                            0.40f to animatedDominantColor.copy(alpha = 0.15f),
+                            0.45f to animatedDominantColor.copy(alpha = 0.12f),
+                            0.50f to animatedDominantColor.copy(alpha = 0.09f),
+                            0.55f to animatedDominantColor.copy(alpha = 0.07f),
+                            0.60f to animatedDominantColor.copy(alpha = 0.05f),
+                            0.70f to animatedDominantColor.copy(alpha = 0.03f),
+                            0.80f to animatedDominantColor.copy(alpha = 0.01f),
+                            1.00f to Color.Transparent
+                        ),
+                        center = Offset(0f, 0f),
+                        radius = 2400f
+                    )
+                )
+        )
+
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val gridWidth = maxWidth
         LazyVerticalGrid(
@@ -187,7 +255,7 @@ fun GridHomeContent(
                     false
                 },
             contentPadding = PaddingValues(
-                start = 48.dp,
+                start = 120.dp,
                 end = 24.dp,
                 top = topPadding,
                 bottom = 32.dp
@@ -196,6 +264,8 @@ fun GridHomeContent(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             var continueWatchingInserted = false
+            var newReleasesInserted = false
+            var streamingServicesInserted = false
             var firstGridFocusableAssigned = false
             val contentOccurrencesByCatalogAndId = mutableMapOf<String, Int>()
 
@@ -207,6 +277,8 @@ fun GridHomeContent(
                             span = { GridItemSpan(maxLineSpan) },
                             contentType = "hero"
                         ) {
+                            // Hero extends full screen width: offset left by grid start padding
+                            val heroExtraStart = 120.dp // matches grid contentPadding.start
                             HeroCarousel(
                                 items = gridItem.items,
                                 focusRequester = if (shouldRequestInitialFocus) heroFocusRequester else null,
@@ -217,14 +289,49 @@ fun GridHomeContent(
                                         ""
                                     )
                                 },
-                                fullWidth = gridWidth,
-                                modifier = Modifier.fillMaxWidth()
+                                onItemFocus = { item ->
+                                    focusedHeroBackdrop = item.backdropUrl
+                                },
+                                fullWidth = gridWidth + heroExtraStart + 24.dp,
+                                contentStartPadding = heroExtraStart,
+                                // Corrigido para não empurrar a largura para fora do ecrã
+                                modifier = Modifier.offset(x = -heroExtraStart)
                             )
                         }
                     }
 
                     is GridItem.SectionDivider -> {
-                        // Insert continue watching before the first section divider
+                        // Insert streaming services before continue watching
+                        if (!streamingServicesInserted && uiState.streamingServiceNames.isNotEmpty()) {
+                            streamingServicesInserted = true
+                            item(
+                                key = "streaming_services",
+                                span = { GridItemSpan(maxLineSpan) },
+                                contentType = "streaming_services"
+                            ) {
+                                StreamingServicesRow(
+                                    serviceNames = uiState.streamingServiceNames,
+                                    onServiceClick = onStreamingServiceClick
+                                )
+                            }
+                        }
+
+                        // Insert new releases
+                        if (!newReleasesInserted && uiState.newReleases.isNotEmpty()) {
+                            newReleasesInserted = true
+                            item(
+                                key = "new_releases",
+                                span = { GridItemSpan(maxLineSpan) },
+                                contentType = "new_releases"
+                            ) {
+                                NewReleasesSection(
+                                    items = uiState.newReleases,
+                                    onItemClick = onNewReleaseClick
+                                )
+                            }
+                        }
+
+                        // Insert continue watching after streaming services and new releases
                         if (!continueWatchingInserted && continueWatchingItems.isNotEmpty()) {
                             continueWatchingInserted = true
                             item(
@@ -283,15 +390,17 @@ fun GridHomeContent(
                         ) {
                             val strTypeMovie = stringResource(R.string.type_movie)
                             val strTypeSeries = stringResource(R.string.type_series)
-                            val typeLabel = when (gridItem.type.lowercase()) {
-                                "movie" -> strTypeMovie
-                                "series" -> strTypeSeries
-                                else -> gridItem.type.replaceFirstChar { it.uppercase() }
-                            }
-                            val displayName = if (uiState.catalogTypeSuffixEnabled && typeLabel.isNotBlank()) {
-                                "${gridItem.catalogName.replaceFirstChar { it.uppercase() }} - $typeLabel"
-                            } else {
-                                gridItem.catalogName.replaceFirstChar { it.uppercase() }
+                            val displayName = remember(gridItem.catalogName, gridItem.type, uiState.catalogTypeSuffixEnabled, strTypeMovie, strTypeSeries) {
+                                val typeLabel = when (gridItem.type.lowercase()) {
+                                    "movie" -> strTypeMovie
+                                    "series" -> strTypeSeries
+                                    else -> gridItem.type.replaceFirstChar { it.uppercase() }
+                                }
+                                if (uiState.catalogTypeSuffixEnabled && typeLabel.isNotBlank()) {
+                                    "${gridItem.catalogName.replaceFirstChar { it.uppercase() }} - $typeLabel"
+                                } else {
+                                    gridItem.catalogName.replaceFirstChar { it.uppercase() }
+                                }
                             }
                             SectionDivider(
                                 catalogName = displayName
@@ -405,16 +514,16 @@ fun GridHomeContent(
                         },
                         onRemoveItem = { item ->
                             val contentId = when (item) {
-                                is ContinueWatchingItem.InProgress -> item.progress.contentId
-                                is ContinueWatchingItem.NextUp -> item.info.contentId
+                                    is ContinueWatchingItem.InProgress -> item.progress.contentId
+                                    is ContinueWatchingItem.NextUp -> item.info.contentId
                             }
                             val season = when (item) {
-                                is ContinueWatchingItem.InProgress -> item.progress.season
-                                is ContinueWatchingItem.NextUp -> item.info.season
+                                    is ContinueWatchingItem.InProgress -> item.progress.season
+                                    is ContinueWatchingItem.NextUp -> item.info.season
                             }
                             val episode = when (item) {
-                                is ContinueWatchingItem.InProgress -> item.progress.episode
-                                is ContinueWatchingItem.NextUp -> item.info.episode
+                                    is ContinueWatchingItem.InProgress -> item.progress.episode
+                                    is ContinueWatchingItem.NextUp -> item.info.episode
                             }
                             val isNextUp = item is ContinueWatchingItem.NextUp
                             onRemoveContinueWatching(contentId, season, episode, isNextUp)
@@ -461,21 +570,9 @@ private fun StickyCategoryHeader(
     sectionName: String,
     modifier: Modifier = Modifier
 ) {
-    val bgColor = NuvioColors.Background
-    val headerGradient = remember(bgColor) {
-        Brush.verticalGradient(
-            colorStops = arrayOf(
-                0.0f to bgColor,
-                0.7f to bgColor.copy(alpha = 0.95f),
-                1.0f to Color.Transparent
-            )
-        )
-    }
-
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .background(headerGradient)
             .padding(horizontal = 48.dp, vertical = 12.dp)
     ) {
         Text(

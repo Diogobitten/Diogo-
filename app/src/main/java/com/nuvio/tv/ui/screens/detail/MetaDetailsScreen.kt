@@ -3,7 +3,11 @@ package com.nuvio.tv.ui.screens.detail
 import android.view.KeyEvent
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -27,6 +31,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -99,6 +104,7 @@ import com.nuvio.tv.ui.components.ErrorState
 import com.nuvio.tv.ui.components.MetaDetailsSkeleton
 import com.nuvio.tv.ui.components.NuvioDialog
 import com.nuvio.tv.ui.components.TrailerPlayer
+import com.nuvio.tv.ui.components.ThemeSongPlayer
 import com.nuvio.tv.ui.theme.NuvioColors
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -227,7 +233,7 @@ fun MetaDetailsScreen(
     var restorePlayFocusAfterTrailerBackToken by rememberSaveable { mutableIntStateOf(0) }
 
     BackHandler {
-        if (uiState.isTrailerPlaying) {
+        if (uiState.isTrailerPlaying && !uiState.isAmbientTrailer) {
             restorePlayFocusAfterTrailerBackToken += 1
             viewModel.onEvent(MetaDetailsEvent.OnTrailerEnded)
         } else {
@@ -236,6 +242,7 @@ fun MetaDetailsScreen(
     }
 
     val currentIsTrailerPlaying by rememberUpdatedState(uiState.isTrailerPlaying)
+    val currentIsAmbientTrailer by rememberUpdatedState(uiState.isAmbientTrailer)
     val currentShowTrailerControls by rememberUpdatedState(uiState.showTrailerControls)
     var trailerSeekOverlayVisible by remember { mutableStateOf(false) }
     val trailerSeekOverlayState = remember { TrailerSeekOverlayState() }
@@ -261,7 +268,7 @@ fun MetaDetailsScreen(
             .fillMaxSize()
             .background(NuvioColors.Background)
             .onPreviewKeyEvent { keyEvent ->
-                if (currentIsTrailerPlaying) {
+                if (currentIsTrailerPlaying && !currentIsAmbientTrailer) {
                     if (currentShowTrailerControls) {
                         if (keyEvent.nativeKeyEvent.action != KeyEvent.ACTION_DOWN) {
                             return@onPreviewKeyEvent false
@@ -466,6 +473,7 @@ fun MetaDetailsScreen(
                     trailerUrl = uiState.trailerUrl,
                     trailerAudioUrl = uiState.trailerAudioUrl,
                     isTrailerPlaying = uiState.isTrailerPlaying,
+                    isAmbientTrailer = uiState.isAmbientTrailer,
                     showTrailerControls = uiState.showTrailerControls,
                     hideLogoDuringTrailer = uiState.hideLogoDuringTrailer,
                     trailerButtonEnabled = uiState.trailerButtonEnabled,
@@ -520,6 +528,12 @@ fun MetaDetailsScreen(
                 )
             }
         }
+
+        // Theme song audio player (invisible, plays in background)
+        ThemeSongPlayer(
+            audioUrl = uiState.themeSongAudioUrl,
+            shouldPause = uiState.isTrailerPlaying && !uiState.isAmbientTrailer
+        )
 
         if (uiState.showListPicker) {
             LibraryListPickerDialog(
@@ -625,6 +639,7 @@ private fun MetaDetailsContent(
     trailerUrl: String?,
     trailerAudioUrl: String?,
     isTrailerPlaying: Boolean,
+    isAmbientTrailer: Boolean,
     showTrailerControls: Boolean,
     hideLogoDuringTrailer: Boolean,
     trailerButtonEnabled: Boolean,
@@ -1019,13 +1034,14 @@ private fun MetaDetailsContent(
         pendingRestoreType,
         pendingRestoreEpisodeId,
         initialHeroFocusRequested,
-        isTrailerPlaying
+        isTrailerPlaying,
+        isAmbientTrailer
     ) {
         if (
             !initialHeroFocusRequested &&
             pendingRestoreType == null &&
             pendingRestoreEpisodeId == null &&
-            !isTrailerPlaying
+            (!isTrailerPlaying || isAmbientTrailer)
         ) {
             repeat(3) {
                 if (initialHeroFocusRequested) return@repeat
@@ -1054,10 +1070,14 @@ private fun MetaDetailsContent(
         backdropWidthPx,
         backdropHeightPx
     ) {
+        val url = meta.backdropUrl ?: meta.poster
         ImageRequest.Builder(localContext)
-            .data(meta.backdropUrl ?: meta.poster)
-            .crossfade(true)
+            .data(url)
+            .crossfade(false)
+            .allowHardware(true)
             .size(width = backdropWidthPx, height = backdropHeightPx)
+            .memoryCacheKey("${url}_${backdropWidthPx}x${backdropHeightPx}")
+            .diskCacheKey("${url}_${backdropWidthPx}x${backdropHeightPx}")
             .build()
     }
 
@@ -1128,6 +1148,7 @@ private fun MetaDetailsContent(
             trailerUrl = trailerUrl,
             trailerAudioUrl = trailerAudioUrl,
             isTrailerPlaying = isTrailerPlaying,
+            isAmbientTrailer = isAmbientTrailer,
             showTrailerControls = showTrailerControls,
             trailerSeekToken = trailerSeekToken,
             trailerSeekDeltaMs = trailerSeekDeltaMs,
@@ -1173,6 +1194,7 @@ private fun MetaDetailsContent(
                         onTrailerClick = onTrailerButtonClick,
                         hideLogoDuringTrailer = hideLogoDuringTrailer,
                         isTrailerPlaying = isTrailerPlaying,
+                        isAmbientTrailer = isAmbientTrailer,
                         playButtonFocusRequester = heroPlayFocusRequester,
                         onHeroActionFocused = {
                             if (listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0) {
@@ -1465,6 +1487,7 @@ private fun BackdropLayer(
     trailerUrl: String?,
     trailerAudioUrl: String?,
     isTrailerPlaying: Boolean,
+    isAmbientTrailer: Boolean,
     showTrailerControls: Boolean,
     trailerSeekToken: Int,
     trailerSeekDeltaMs: Long,
@@ -1475,13 +1498,24 @@ private fun BackdropLayer(
     leftGradient: ImageBitmap,
     bottomGradient: ImageBitmap,
 ) {
+    var trailerFirstFrameRendered by remember { mutableStateOf(false) }
+
+    // Reset first frame flag when trailer stops
+    LaunchedEffect(isTrailerPlaying) {
+        if (!isTrailerPlaying) {
+            trailerFirstFrameRendered = false
+        }
+    }
+
+    // Backdrop fades out only after trailer's first frame is rendered
+    val shouldHideBackdrop = isTrailerPlaying && trailerFirstFrameRendered
     val backdropAlphaState = animateFloatAsState(
-        targetValue = if (isTrailerPlaying) 0f else 1f,
+        targetValue = if (shouldHideBackdrop) 0f else 1f,
         animationSpec = tween(durationMillis = 800),
         label = "backdropFade"
     )
     val gradientAlphaState = animateFloatAsState(
-        targetValue = if (isTrailerPlaying) 0f else 1f,
+        targetValue = if (shouldHideBackdrop) 0f else 1f,
         animationSpec = tween(durationMillis = 800),
         label = "gradientFade"
     )
@@ -1490,21 +1524,44 @@ private fun BackdropLayer(
         animationSpec = tween(durationMillis = 300),
         label = "bottomGradientFade"
     )
+    val zoomTransition = rememberInfiniteTransition(label = "detailBackdropZoom")
+    val zoomScale by zoomTransition.animateFloat(
+        initialValue = 1.0f,
+        targetValue = 1.08f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 10_000),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "detailBackdropZoomScale"
+    )
+
     Box(modifier = Modifier.fillMaxSize()) {
         AsyncImage(
             model = backdropRequest,
             contentDescription = null,
-            modifier = if (isTrailerPlaying || backdropAlphaState.value < 1f) {
-                Modifier.fillMaxSize().graphicsLayer { alpha = backdropAlphaState.value }
+            modifier = if (shouldHideBackdrop || backdropAlphaState.value < 1f) {
+                Modifier.fillMaxSize().graphicsLayer {
+                    scaleX = zoomScale
+                    scaleY = zoomScale
+                    alpha = backdropAlphaState.value
+                }
             } else {
-                Modifier.fillMaxSize()
+                Modifier.fillMaxSize().graphicsLayer {
+                    scaleX = zoomScale
+                    scaleY = zoomScale
+                }
             },
             contentScale = ContentScale.Crop
         )
         TrailerPlayer(
             trailerUrl = trailerUrl,
-            trailerAudioUrl = trailerAudioUrl,
+            trailerAudioUrl = if (isAmbientTrailer) null else trailerAudioUrl,
             isPlaying = isTrailerPlaying,
+            muted = isAmbientTrailer,
+            initialSeekMs = if (isAmbientTrailer) 20_000L else 0L,
+            cropToFill = isAmbientTrailer,
+            overscanZoom = if (isAmbientTrailer) 1.15f else 1f,
+            onFirstFrameRendered = { trailerFirstFrameRendered = true },
             seekRequestToken = if (showTrailerControls) trailerSeekToken else 0,
             seekDeltaMs = if (showTrailerControls) trailerSeekDeltaMs else 0L,
             onRemoteKey = onTrailerControlKey,

@@ -206,6 +206,19 @@ class AuthManager @Inject constructor(
         }
     }
 
+    /**
+     * Import an auth session from external tokens (e.g. local HTTP server login flow).
+     */
+    suspend fun importSession(accessToken: String, refreshToken: String): Result<Unit> {
+        return try {
+            auth.importAuthToken(accessToken, refreshToken)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to import auth session", e)
+            Result.failure(e)
+        }
+    }
+
     suspend fun signOut(explicit: Boolean = true) {
         if (explicit) {
             authSessionNoticeDataStore.markNuvioExplicitLogout()

@@ -82,8 +82,8 @@ import com.nuvio.tv.ui.theme.NuvioColors
 private object ProfileSelectionSpacing {
     val ScreenPaddingHorizontal = 56.dp
     val ScreenPaddingVertical = 48.dp
-    val LogoWidth = 190.dp
-    val LogoHeight = 44.dp
+    val LogoWidth = 280.dp
+    val LogoHeight = 70.dp
     val LogoToHeading = 28.dp
     val HeadingToSubheading = 12.dp
     val GridItemGap = 28.dp
@@ -379,8 +379,8 @@ private fun ProfileSelectionMainContent(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Image(
-            painter = painterResource(id = R.drawable.app_logo_wordmark),
-            contentDescription = "NuvioTV",
+            painter = painterResource(id = R.drawable.dplus_logo),
+            contentDescription = "Diogo+",
             modifier = Modifier
                 .width(ProfileSelectionSpacing.LogoWidth)
                 .height(ProfileSelectionSpacing.LogoHeight),

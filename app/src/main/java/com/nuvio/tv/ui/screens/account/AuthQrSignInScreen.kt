@@ -76,13 +76,18 @@ fun AuthQrSignInScreen(
         }
     }
 
-    LaunchedEffect(uiState.authState, isSignedIn, uiState.qrLoginCode, uiState.isLoading) {
+    // Track whether we've already initiated a QR login to prevent re-triggering loops
+    var hasInitiatedQrLogin by remember { mutableStateOf(false) }
+
+    LaunchedEffect(uiState.authState, isSignedIn) {
         if (
+            !hasInitiatedQrLogin &&
             uiState.authState !is AuthState.Loading &&
             !isSignedIn &&
             uiState.qrLoginCode.isNullOrBlank() &&
             !uiState.isLoading
         ) {
+            hasInitiatedQrLogin = true
             viewModel.startQrLogin()
         }
     }
@@ -135,11 +140,11 @@ fun AuthQrSignInScreen(
                 verticalArrangement = Arrangement.Center
             ) {
                 Image(
-                    painter = painterResource(id = R.drawable.app_logo_wordmark),
-                    contentDescription = "Nuvio",
+                    painter = painterResource(id = R.drawable.dplus_logo),
+                    contentDescription = "Diogo+",
                     modifier = Modifier
                         .fillMaxWidth(0.85f)
-                        .height(60.dp),
+                        .height(90.dp),
                     contentScale = ContentScale.Fit
                 )
                 Spacer(modifier = Modifier.height(22.dp))

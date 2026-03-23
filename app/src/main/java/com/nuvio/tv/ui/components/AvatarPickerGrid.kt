@@ -10,9 +10,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -21,12 +19,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -51,16 +47,19 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlin.math.floor
-import kotlin.math.max
 import androidx.tv.material3.Text
 import coil.compose.AsyncImage
+import coil.decode.SvgDecoder
 import coil.request.ImageRequest
 import com.nuvio.tv.R
 import com.nuvio.tv.data.remote.supabase.AvatarCatalogItem
 import com.nuvio.tv.ui.theme.NuvioColors
 
-private val PinnedAvatarCategories = listOf("anime", "animation", "tv", "movie", "gaming")
+private val PinnedAvatarCategories = listOf(
+    "actors", "marvel", "dc comics", "star wars", "heroes",
+    "rick and morty", "anime", "saint seiya", "pokémon", "cartoon network",
+    "adventurer", "big ears", "cartoon", "emoji", "lorelei", "personas"
+)
 
 @Composable
 fun AvatarPickerGrid(
@@ -93,9 +92,6 @@ fun AvatarPickerGrid(
         }
     }
     var selectedCategory by remember { mutableStateOf("all") }
-    val categoryRequesters = remember(categories) {
-        categories.associateWith { FocusRequester() }
-    }
 
     LaunchedEffect(categories) {
         if (selectedCategory !in categories) {
@@ -107,11 +103,6 @@ fun AvatarPickerGrid(
         if (selectedCategory == "all") avatars
         else avatars.filter { it.category.equals(selectedCategory, ignoreCase = true) }
     }
-    val avatarRequesters = remember(filteredAvatars) {
-        filteredAvatars.associate { it.id to FocusRequester() }
-    }
-    val selectedCategoryRequester = categoryRequesters.getValue(selectedCategory)
-    val firstAvatarRequester = filteredAvatars.firstOrNull()?.let { avatarRequesters[it.id] }
 
     Column(modifier = modifier) {
         // Category tabs
@@ -126,8 +117,6 @@ fun AvatarPickerGrid(
                 CategoryTab(
                     label = categoryLabel(category),
                     isSelected = selectedCategory == category,
-                    focusRequester = categoryRequesters.getValue(category),
-                    downFocusRequester = if (selectedCategory == category) firstAvatarRequester else null,
                     onClick = { selectedCategory = category }
                 )
                 if (category != categories.last()) {
@@ -136,39 +125,31 @@ fun AvatarPickerGrid(
             }
         }
 
-        BoxWithConstraints(
-            modifier = Modifier
-                .fillMaxWidth()
-                .wrapContentHeight()
-        ) {
-            val minCellWidth = 88.dp
-            val horizontalSpacing = 12.dp
-            val horizontalPadding = 16.dp
-            val availableWidth = maxWidth - horizontalPadding
-            val columnCount = max(
-                1,
-                floor(
-                    (availableWidth.value + horizontalSpacing.value) /
-                        (minCellWidth.value + horizontalSpacing.value)
-                ).toInt()
-            )
+        // Avatar grid using LazyColumn+Row (lazy rendering for large catalogs)
+        val columns = 5
+        val rows = remember(filteredAvatars) { filteredAvatars.chunked(columns) }
 
-            LazyVerticalGrid(
-                columns = GridCells.Adaptive(minSize = minCellWidth),
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(horizontalSpacing),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                itemsIndexed(filteredAvatars, key = { _, avatar -> avatar.id }) { index, avatar ->
-                    AvatarGridItem(
-                        avatar = avatar,
-                        isSelected = avatar.id == selectedAvatarId,
-                        focusRequester = avatarRequesters.getValue(avatar.id),
-                        upFocusRequester = if (index < columnCount) selectedCategoryRequester else null,
-                        onFocused = { focused -> if (focused) onAvatarFocused?.invoke(avatar) },
-                        onClick = { onAvatarSelected(avatar) }
-                    )
+        LazyColumn(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            items(rows, key = { row -> row.first().id }) { rowItems ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally)
+                ) {
+                    rowItems.forEach { avatar ->
+                        AvatarGridItem(
+                            avatar = avatar,
+                            isSelected = avatar.id == selectedAvatarId,
+                            onFocused = { focused -> if (focused) onAvatarFocused?.invoke(avatar) },
+                            onClick = { onAvatarSelected(avatar) }
+                        )
+                    }
+                    // Fill remaining slots with invisible spacers to keep alignment
+                    repeat(columns - rowItems.size) {
+                        Spacer(modifier = Modifier.requiredSize(80.dp))
+                    }
                 }
             }
         }
@@ -179,8 +160,6 @@ fun AvatarPickerGrid(
 private fun CategoryTab(
     label: String,
     isSelected: Boolean,
-    focusRequester: FocusRequester,
-    downFocusRequester: FocusRequester?,
     onClick: () -> Unit
 ) {
     var isFocused by remember { mutableStateOf(false) }
@@ -224,14 +203,6 @@ private fun CategoryTab(
 
     Box(
         modifier = Modifier
-            .focusRequester(focusRequester)
-            .then(
-                if (downFocusRequester != null) {
-                    Modifier.focusProperties { down = downFocusRequester }
-                } else {
-                    Modifier
-                }
-            )
             .clip(RoundedCornerShape(20.dp))
             .background(bgColor)
             .border(borderWidth, borderColor, RoundedCornerShape(20.dp))
@@ -257,13 +228,12 @@ private fun CategoryTab(
 private fun AvatarGridItem(
     avatar: AvatarCatalogItem,
     isSelected: Boolean,
-    focusRequester: FocusRequester,
-    upFocusRequester: FocusRequester?,
     onFocused: (Boolean) -> Unit,
     onClick: () -> Unit
 ) {
     var isFocused by remember { mutableStateOf(false) }
     val interactionSource = remember { MutableInteractionSource() }
+    val context = LocalContext.current
 
     val scale by animateFloatAsState(
         targetValue = if (isFocused) 1.1f else 1f,
@@ -288,6 +258,8 @@ private fun AvatarGridItem(
         label = "avatarBorderColor"
     )
 
+    val isSvg = remember(avatar.imageUrl) { avatar.imageUrl.contains("/svg") }
+
     Box(
         modifier = Modifier
             .requiredSize(80.dp)
@@ -295,14 +267,6 @@ private fun AvatarGridItem(
                 scaleX = scale
                 scaleY = scale
             }
-            .focusRequester(focusRequester)
-            .then(
-                if (upFocusRequester != null) {
-                    Modifier.focusProperties { up = upFocusRequester }
-                } else {
-                    Modifier
-                }
-            )
             .onFocusChanged {
                 isFocused = it.isFocused
                 onFocused(it.isFocused)
@@ -322,9 +286,12 @@ private fun AvatarGridItem(
                 .clip(CircleShape)
         ) {
             AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
+                model = ImageRequest.Builder(context)
                     .data(avatar.imageUrl)
                     .crossfade(true)
+                    .apply {
+                        if (isSvg) decoderFactory(SvgDecoder.Factory())
+                    }
                     .build(),
                 contentDescription = avatar.displayName,
                 modifier = Modifier.fillMaxSize(),
@@ -338,7 +305,22 @@ private fun AvatarGridItem(
 private fun categoryLabel(category: String): String {
     return when (category) {
         "all" -> stringResource(R.string.profile_avatar_category_all)
-        "anime" -> stringResource(R.string.profile_avatar_category_anime)
+        "adventurer" -> "Adventurer"
+        "big ears" -> "Big Ears"
+        "cartoon" -> "Cartoon"
+        "emoji" -> "Emoji"
+        "lorelei" -> "Lorelei"
+        "personas" -> "Personas"
+        "actors" -> "Actors"
+        "marvel" -> "Marvel"
+        "dc comics" -> "DC Comics"
+        "star wars" -> "Star Wars"
+        "heroes" -> "Heroes"
+        "rick and morty" -> "Rick and Morty"
+        "anime" -> "Anime"
+        "saint seiya" -> "Cavaleiros do Zodíaco"
+        "pokémon" -> "Pokémon"
+        "cartoon network" -> "Cartoon Network"
         "animation" -> stringResource(R.string.profile_avatar_category_animation)
         "movie" -> stringResource(R.string.profile_avatar_category_movie)
         "tv" -> stringResource(R.string.profile_avatar_category_tv)

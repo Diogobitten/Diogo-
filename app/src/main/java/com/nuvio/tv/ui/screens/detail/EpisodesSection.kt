@@ -482,7 +482,10 @@ private fun EpisodeCard(
         ImageRequest.Builder(context)
             .data(episode.thumbnail)
             .crossfade(false)
+            .allowHardware(!shouldBlur)
             .size(width = thumbnailWidthPx, height = thumbnailHeightPx)
+            .memoryCacheKey("${episode.thumbnail}_${thumbnailWidthPx}x${thumbnailHeightPx}_blur=$shouldBlur")
+            .diskCacheKey("${episode.thumbnail}_${thumbnailWidthPx}x${thumbnailHeightPx}")
             .apply {
                 if (shouldBlur) {
                     transformations(com.nuvio.tv.ui.util.BlurTransformation())

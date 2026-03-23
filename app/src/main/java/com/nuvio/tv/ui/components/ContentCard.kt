@@ -198,7 +198,9 @@ fun ContentCard(
             ImageRequest.Builder(context)
                 .data(imageUrl)
                 .crossfade(false)
+                .allowHardware(true)
                 .memoryCacheKey("${imageUrl}_${requestWidthPx}x${requestHeightPx}")
+                .diskCacheKey("${imageUrl}_${requestWidthPx}x${requestHeightPx}")
                 .size(width = requestWidthPx, height = requestHeightPx)
                 .build()
         }
@@ -211,6 +213,7 @@ fun ContentCard(
                     .data(logoUrl)
                     .crossfade(false)
                     .memoryCacheKey("${logoUrl}_${requestWidthPx}x${logoRequestHeightPx}")
+                    .diskCacheKey("${logoUrl}_${requestWidthPx}x${logoRequestHeightPx}")
                     .size(width = requestWidthPx, height = logoRequestHeightPx)
                     .build()
             }

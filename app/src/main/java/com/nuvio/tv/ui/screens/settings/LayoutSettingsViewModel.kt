@@ -3,6 +3,8 @@ package com.nuvio.tv.ui.screens.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nuvio.tv.data.local.LayoutPreferenceDataStore
+import com.nuvio.tv.data.local.TraktAuthDataStore
+import com.nuvio.tv.data.repository.TraktDiscoveryService
 import com.nuvio.tv.domain.model.FocusedPosterTrailerPlaybackTarget
 import com.nuvio.tv.domain.model.HomeLayout
 import com.nuvio.tv.domain.repository.AddonRepository
@@ -12,6 +14,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -83,7 +86,9 @@ sealed class LayoutSettingsEvent {
 class LayoutSettingsViewModel @Inject constructor(
     private val layoutPreferenceDataStore: LayoutPreferenceDataStore,
     private val addonRepository: AddonRepository,
-    private val metaRepository: com.nuvio.tv.domain.repository.MetaRepository
+    private val metaRepository: com.nuvio.tv.domain.repository.MetaRepository,
+    private val traktDiscoveryService: TraktDiscoveryService,
+    private val traktAuthDataStore: TraktAuthDataStore
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(LayoutSettingsUiState())
@@ -443,7 +448,21 @@ class LayoutSettingsViewModel @Inject constructor(
                             )
                         }
                 }
-                updateUiStateIfChanged { it.copy(availableCatalogs = catalogs) }
+
+                // Add Trakt discovery catalogs if authenticated
+                val traktCatalogs = try {
+                    val authState = traktAuthDataStore.state.first()
+                    if (authState.isAuthenticated) {
+                        listOf(
+                            CatalogInfo(key = "trakt-discovery_movie_trakt-trending", name = "Tendências", addonName = "Trakt"),
+                            CatalogInfo(key = "trakt-discovery_movie_trakt-recommended", name = "Recomendados", addonName = "Trakt"),
+                            CatalogInfo(key = "trakt-discovery_movie_trakt-anticipated", name = "Mais Esperados", addonName = "Trakt"),
+                            CatalogInfo(key = "trakt-discovery_movie_trakt-popular", name = "Populares", addonName = "Trakt")
+                        )
+                    } else emptyList()
+                } catch (_: Exception) { emptyList() }
+
+                updateUiStateIfChanged { it.copy(availableCatalogs = catalogs + traktCatalogs) }
             }
         }
     }

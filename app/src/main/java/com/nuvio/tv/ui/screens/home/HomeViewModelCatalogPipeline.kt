@@ -128,6 +128,19 @@ internal suspend fun HomeViewModel.loadAllCatalogsPipeline(
 
         rebuildCatalogOrder(addons)
 
+        // Re-insert Trakt discovery rows if they were loaded
+        traktDiscoveryRows.forEach { row ->
+            val key = catalogKey(
+                addonId = row.addonId,
+                type = row.apiType,
+                catalogId = row.catalogId
+            )
+            catalogsMap[key] = row
+            if (key !in catalogOrder) {
+                catalogOrder.add(key)
+            }
+        }
+
         if (catalogOrder.isEmpty()) {
             catalogsLoadInProgress = false
             _uiState.update { it.copy(isLoading = false, error = "No catalog addons installed") }
@@ -287,14 +300,20 @@ internal suspend fun HomeViewModel.updateCatalogRowsPipeline() {
     val currentGridItems = _uiState.value.gridItems
     val heroSectionEnabled = _uiState.value.heroSectionEnabled
     val hideUnreleased = _uiState.value.hideUnreleasedContent
+    val activeContentTypeFilter = _contentTypeFilter.value
 
     val (displayRows, baseHeroItems, baseGridItems, fullRowsFiltered) = withContext(Dispatchers.Default) {
         val rawRows = orderedKeys.mapNotNull { key -> catalogSnapshot[key] }
-        val orderedRows = if (hideUnreleased) {
-            val today = LocalDate.now()
-            rawRows.map { it.filterReleasedItems(today) }
+        val typeFilteredRows = if (activeContentTypeFilter != null) {
+            rawRows.filter { it.rawType.equals(activeContentTypeFilter, ignoreCase = true) }
         } else {
             rawRows
+        }
+        val orderedRows = if (hideUnreleased) {
+            val today = LocalDate.now()
+            typeFilteredRows.map { it.filterReleasedItems(today) }
+        } else {
+            typeFilteredRows
         }
         val selectedHeroCatalogSet = heroCatalogKeys.toSet()
         val selectedHeroRows = if (selectedHeroCatalogSet.isNotEmpty()) {
@@ -433,18 +452,43 @@ internal suspend fun HomeViewModel.updateCatalogRowsPipeline() {
 
     heroItemOrder = baseHeroItems.map { it.id }
 
-    _uiState.update { state ->
-        state.copy(
-            catalogRows = if (state.catalogRows == displayRows) state.catalogRows else displayRows,
-            heroItems = if (state.heroItems == baseHeroItems) state.heroItems else baseHeroItems,
-            gridItems = if (state.gridItems == nextGridItems) state.gridItems else nextGridItems,
-            isLoading = false
-        )
-    }
-
     val tmdbSettings = currentTmdbSettings
     val shouldUseEnrichedHeroItems = tmdbSettings.enabled &&
         (tmdbSettings.useArtwork || tmdbSettings.useBasicInfo || tmdbSettings.useDetails)
+
+    // If we already have cached enriched items for the same hero set, use them immediately
+    // to avoid a flash where the un-enriched base items briefly show (losing logos/backdrops).
+    val initialHeroItems = if (shouldUseEnrichedHeroItems && baseHeroItems.isNotEmpty()) {
+        val enrichmentSignature = heroEnrichmentSignaturePipeline(baseHeroItems, tmdbSettings)
+        if (lastHeroEnrichmentSignature == enrichmentSignature && lastHeroEnrichedItems.isNotEmpty()) {
+            lastHeroEnrichedItems
+        } else {
+            baseHeroItems
+        }
+    } else {
+        baseHeroItems
+    }
+
+    _uiState.update { state ->
+        // Extract streaming service names from "Streaming Catalogs" addon
+        val streamingAddon = displayRows.firstOrNull { row ->
+            row.addonName.contains("Streaming Catalog", ignoreCase = true)
+        }
+        val streamingNames = if (streamingAddon != null) {
+            displayRows.filter { it.addonName == streamingAddon.addonName }
+                .map { it.catalogName }
+                .distinct()
+        } else emptyList()
+
+        state.copy(
+            catalogRows = if (state.catalogRows == displayRows) state.catalogRows else displayRows,
+            heroItems = if (state.heroItems == initialHeroItems) state.heroItems else initialHeroItems,
+            gridItems = if (state.gridItems == nextGridItems) state.gridItems else nextGridItems,
+            isLoading = false,
+            streamingServiceNames = streamingNames,
+            streamingServiceAddonName = streamingAddon?.addonName
+        )
+    }
 
     if (shouldUseEnrichedHeroItems && baseHeroItems.isNotEmpty()) {
         heroEnrichmentJob?.cancel()

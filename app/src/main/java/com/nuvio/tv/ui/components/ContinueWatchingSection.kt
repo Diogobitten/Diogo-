@@ -301,7 +301,9 @@ fun ContinueWatchingCard(
         ImageRequest.Builder(context)
             .data(imageModel)
             .crossfade(false)
+            .allowHardware(true)
             .memoryCacheKey("${imageModel}_${requestWidthPx}x${requestHeightPx}")
+            .diskCacheKey("${imageModel}_${requestWidthPx}x${requestHeightPx}")
             .size(width = requestWidthPx, height = requestHeightPx)
             .build()
     }

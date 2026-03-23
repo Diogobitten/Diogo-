@@ -57,9 +57,9 @@ import coil.compose.rememberAsyncImagePainter
 import coil.decode.SvgDecoder
 import coil.request.ImageRequest
 
-private val SidebarLeadingVisualSize = 34.dp
-private val SidebarContentGap = 14.dp
-private val SidebarProfileContentGap = 18.dp
+private val SidebarLeadingVisualSize = 20.dp
+private val SidebarContentGap = 7.dp
+private val SidebarProfileContentGap = 8.dp
 
 @Composable
 internal fun ModernSidebarBlurPanel(
@@ -133,13 +133,13 @@ internal fun ModernSidebarBlurPanel(
             .clip(panelShape)
             .background(brush = panelBackgroundBrush, shape = panelShape)
             .border(width = 1.dp, color = panelBorderColor, shape = panelShape)
-            .padding(horizontal = 12.dp, vertical = 14.dp)
+            .padding(horizontal = 10.dp, vertical = 10.dp)
     ) {
         if (showProfileSelector && activeProfileName.isNotEmpty()) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .offset(y = 12.dp),
+                    .offset(y = 8.dp),
                 contentAlignment = Alignment.Center
             ) {
                 SidebarProfileItem(
@@ -159,21 +159,21 @@ internal fun ModernSidebarBlurPanel(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .offset(y = 12.dp),
+                    .offset(y = 8.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Image(
-                    painter = painterResource(id = R.drawable.app_logo_wordmark),
-                    contentDescription = "NuvioTV",
+                    painter = painterResource(id = R.drawable.dplus_logo),
+                    contentDescription = "Diogo+",
                     modifier = Modifier
-                        .fillMaxWidth(0.72f)
+                        .fillMaxWidth(0.82f)
                         .height(36.dp),
                     alpha = sidebarLabelAlpha
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
         Column(
             modifier = Modifier
@@ -183,10 +183,19 @@ internal fun ModernSidebarBlurPanel(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Column(
-                modifier = Modifier.offset(y = (-12).dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                modifier = Modifier.offset(y = (-8).dp),
+                verticalArrangement = Arrangement.spacedBy(1.dp)
             ) {
                 drawerItems.forEachIndexed { index, item ->
+                    if (item.isDivider) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(0.82f)
+                                .padding(vertical = 2.dp)
+                                .height(1.dp)
+                                .background(Color.White.copy(alpha = 0.12f))
+                        )
+                    }
                     SidebarNavigationItem(
                         label = item.label,
                         iconRes = item.iconRes,
@@ -262,7 +271,7 @@ private fun SidebarNavigationItem(
                     true
                 } else false
             }
-            .padding(horizontal = 14.dp, vertical = 10.dp),
+            .padding(horizontal = 8.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
@@ -270,7 +279,7 @@ private fun SidebarNavigationItem(
                 .size(SidebarLeadingVisualSize)
                 .clip(CircleShape)
                 .background(iconCircleColor)
-                .padding(6.dp)
+                .padding(3.dp)
                 .graphicsLayer {
                     scaleX = iconScale
                     scaleY = iconScale
@@ -282,14 +291,14 @@ private fun SidebarNavigationItem(
                     imageVector = icon,
                     contentDescription = null,
                     tint = contentColor,
-                    modifier = Modifier.size(22.dp)
+                    modifier = Modifier.size(13.dp)
                 )
 
                 iconRes != null -> Icon(
                     painter = rememberRawSvgPainter(iconRes),
                     contentDescription = null,
                     tint = contentColor,
-                    modifier = Modifier.size(22.dp)
+                    modifier = Modifier.size(13.dp)
                 )
             }
         }
@@ -301,7 +310,7 @@ private fun SidebarNavigationItem(
             modifier = Modifier
                 .weight(1f)
                 .graphicsLayer { alpha = labelAlpha },
-            style = androidx.tv.material3.MaterialTheme.typography.titleLarge,
+            style = androidx.tv.material3.MaterialTheme.typography.bodyMedium,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
@@ -349,7 +358,7 @@ private fun SidebarProfileItem(
                     true
                 } else false
             }
-            .padding(horizontal = 14.dp, vertical = 10.dp),
+            .padding(horizontal = 8.dp, vertical = 5.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
@@ -370,7 +379,7 @@ private fun SidebarProfileItem(
             modifier = Modifier
                 .weight(1f)
                 .graphicsLayer { alpha = labelAlpha },
-            style = androidx.tv.material3.MaterialTheme.typography.titleLarge.copy(
+            style = androidx.tv.material3.MaterialTheme.typography.bodyMedium.copy(
                 fontWeight = FontWeight.SemiBold
             ),
             maxLines = 1,

@@ -23,20 +23,22 @@ class NuvioApplication : Application(), ImageLoaderFactory {
         return ImageLoader.Builder(this)
             .memoryCache {
                 MemoryCache.Builder(this)
-                    .maxSizePercent(0.25)
+                    .maxSizePercent(0.50)
                     .build()
             }
             .diskCache {
                 DiskCache.Builder()
                     .directory(cacheDir.resolve("image_cache"))
-                    .maxSizeBytes(200L * 1024 * 1024)
+                    .maxSizeBytes(250L * 1024 * 1024)
                     .build()
             }
-            .decoderDispatcher(Dispatchers.IO.limitedParallelism(2))
+            .decoderDispatcher(Dispatchers.IO.limitedParallelism(4))
             .fetcherDispatcher(Dispatchers.IO.limitedParallelism(4))
-            .bitmapFactoryMaxParallelism(2)
+            .bitmapFactoryMaxParallelism(4)
+            .allowHardware(true)
             .allowRgb565(true)
             .crossfade(false)
+            .respectCacheHeaders(false)
             .build()
     }
 }

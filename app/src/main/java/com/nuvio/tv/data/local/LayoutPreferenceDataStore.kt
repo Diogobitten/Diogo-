@@ -192,7 +192,7 @@ class LayoutPreferenceDataStore @Inject constructor(
     }
 
     val detailPageTrailerButtonEnabled: Flow<Boolean> = profileFlow { prefs ->
-        prefs[detailPageTrailerButtonEnabledKey] ?: false
+        prefs[detailPageTrailerButtonEnabledKey] ?: true
     }
 
     val preferExternalMetaAddonDetail: Flow<Boolean> = profileFlow { prefs ->
@@ -261,7 +261,7 @@ class LayoutPreferenceDataStore @Inject constructor(
     suspend fun setSidebarCollapsedByDefault(collapsed: Boolean) {
         store().edit { prefs ->
             val modernSidebarEnabled =
-                prefs[modernSidebarEnabledKey] ?: prefs[legacyModernSidebarEnabledKey] ?: false
+                prefs[modernSidebarEnabledKey] ?: prefs[legacyModernSidebarEnabledKey] ?: true
             prefs[sidebarCollapsedKey] = if (modernSidebarEnabled) false else collapsed
         }
     }

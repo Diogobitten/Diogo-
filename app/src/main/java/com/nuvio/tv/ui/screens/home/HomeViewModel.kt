@@ -11,8 +11,12 @@ import com.nuvio.tv.data.local.LayoutPreferenceDataStore
 import com.nuvio.tv.data.local.PlayerSettingsDataStore
 import com.nuvio.tv.data.local.StartupAuthNotice
 import com.nuvio.tv.data.local.TmdbSettingsDataStore
+import com.nuvio.tv.data.local.TraktAuthDataStore
 import com.nuvio.tv.data.local.TraktSettingsDataStore
 import com.nuvio.tv.data.local.WatchedItemsPreferences
+import com.nuvio.tv.data.repository.CalendarRepository
+import com.nuvio.tv.data.repository.TraktAuthService
+import com.nuvio.tv.data.repository.TraktDiscoveryService
 import com.nuvio.tv.data.trailer.TrailerService
 import com.nuvio.tv.domain.model.Addon
 import com.nuvio.tv.domain.model.CatalogDescriptor
@@ -32,6 +36,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -55,7 +61,11 @@ class HomeViewModel @Inject constructor(
     internal val tmdbService: TmdbService,
     internal val tmdbMetadataService: TmdbMetadataService,
     internal val trailerService: TrailerService,
-    internal val watchedItemsPreferences: WatchedItemsPreferences
+    internal val watchedItemsPreferences: WatchedItemsPreferences,
+    internal val calendarRepository: CalendarRepository,
+    internal val traktDiscoveryService: TraktDiscoveryService,
+    internal val traktAuthService: TraktAuthService,
+    internal val traktAuthDataStore: TraktAuthDataStore
 ) : ViewModel() {
     companion object {
         internal const val TAG = "HomeViewModel"
@@ -76,6 +86,16 @@ class HomeViewModel @Inject constructor(
         .distinctUntilChanged()
     internal val _fullCatalogRows = MutableStateFlow<List<CatalogRow>>(emptyList())
     val fullCatalogRows: StateFlow<List<CatalogRow>> = _fullCatalogRows.asStateFlow()
+
+    internal val _contentTypeFilter = MutableStateFlow<String?>(null)
+    val contentTypeFilter: StateFlow<String?> = _contentTypeFilter.asStateFlow()
+
+    fun setContentTypeFilter(filter: String?) {
+        if (_contentTypeFilter.value != filter) {
+            _contentTypeFilter.value = filter
+            scheduleUpdateCatalogRows()
+        }
+    }
 
     private val _focusState = MutableStateFlow(HomeScreenFocusState())
     val focusState: StateFlow<HomeScreenFocusState> = _focusState.asStateFlow()
@@ -116,6 +136,7 @@ class HomeViewModel @Inject constructor(
     internal var activeTrailerPreviewItemId: String? = null
     internal var trailerPreviewRequestVersion: Long = 0L
     internal var currentTmdbSettings: TmdbSettings = TmdbSettings()
+    internal var traktDiscoveryRows: List<CatalogRow> = emptyList()
     internal var heroEnrichmentJob: Job? = null
     internal var lastHeroEnrichmentSignature: String? = null
     internal var lastHeroEnrichedItems: List<MetaPreview> = emptyList()
@@ -153,6 +174,8 @@ class HomeViewModel @Inject constructor(
         observeTmdbSettings()
         observeStartupAuthNotice()
         loadContinueWatching()
+        loadNewReleases()
+        loadTraktDiscovery()
         observeInstalledAddons()
         viewModelScope.launch {
             delay(3000)
@@ -230,6 +253,78 @@ class HomeViewModel @Inject constructor(
     }
 
     private fun loadContinueWatching() = loadContinueWatchingPipeline()
+
+    private fun loadNewReleases() {
+        viewModelScope.launch {
+            // Give library time to load before fetching calendar data
+            delay(2000)
+
+            try {
+                val items = calendarRepository.getCalendarItems(days = 14, pastDays = 7)
+                val today = java.time.LocalDate.now()
+                val filtered = items.filter { item ->
+                    val date = try { java.time.LocalDate.parse(item.date) } catch (_: Exception) { return@filter false }
+                    date == today
+                }.sortedByDescending { it.date }
+                android.util.Log.d(TAG, "New releases: ${filtered.size} items (from ${items.size} calendar items)")
+                _uiState.update { it.copy(newReleases = filtered) }
+            } catch (e: Exception) {
+                android.util.Log.w(TAG, "Failed to load new releases: ${e.message}", e)
+            }
+        }
+    }
+
+    private fun loadTraktDiscovery() {
+        viewModelScope.launch {
+            traktAuthDataStore.state
+                .map { it.isAuthenticated }
+                .distinctUntilChanged()
+                .collectLatest { isAuthenticated ->
+                    if (!isAuthenticated) {
+                        if (traktDiscoveryRows.isNotEmpty()) {
+                            traktDiscoveryRows.forEach { row ->
+                                val key = catalogKey(
+                                    addonId = row.addonId,
+                                    type = row.apiType,
+                                    catalogId = row.catalogId
+                                )
+                                catalogsMap.remove(key)
+                                catalogOrder.remove(key)
+                            }
+                            traktDiscoveryRows = emptyList()
+                            traktDiscoveryService.clearCache()
+                            scheduleUpdateCatalogRows()
+                        }
+                        android.util.Log.d(TAG, "Trakt not authenticated, skipping discovery rows")
+                        return@collectLatest
+                    }
+
+                    delay(2000)
+
+                    try {
+                        val rows = traktDiscoveryService.getDiscoveryRows()
+                        if (rows.isNotEmpty()) {
+                            traktDiscoveryRows = rows
+                            rows.forEach { row ->
+                                val key = catalogKey(
+                                    addonId = row.addonId,
+                                    type = row.apiType,
+                                    catalogId = row.catalogId
+                                )
+                                catalogsMap[key] = row
+                                if (key !in catalogOrder) {
+                                    catalogOrder.add(key)
+                                }
+                            }
+                            android.util.Log.d(TAG, "Trakt discovery: ${rows.size} rows loaded")
+                            scheduleUpdateCatalogRows()
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.w(TAG, "Failed to load Trakt discovery: ${e.message}", e)
+                    }
+                }
+        }
+    }
 
     private fun removeContinueWatching(
         contentId: String,

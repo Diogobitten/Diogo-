@@ -4,6 +4,8 @@ import java.net.URLEncoder
 
 sealed class Screen(val route: String) {
     data object Home : Screen("home")
+    data object HomeMovies : Screen("home_movies")
+    data object HomeSeries : Screen("home_series")
     data object Detail : Screen("detail/{itemId}/{itemType}?addonBaseUrl={addonBaseUrl}&returnFocusSeason={returnFocusSeason}&returnFocusEpisode={returnFocusEpisode}&returnToHomeOnBack={returnToHomeOnBack}") {
         private fun encode(value: String): String =
             URLEncoder.encode(value, "UTF-8").replace("+", "%20")
@@ -149,6 +151,10 @@ sealed class Screen(val route: String) {
             return "catalog_see_all/${encode(catalogId)}/${encode(addonId)}/${encode(type)}"
         }
     }
+
+    data object Calendar : Screen("calendar")
+
+    data object Diobot : Screen("diobot")
 
     data object ProfileSelection : Screen("profile_selection")
 

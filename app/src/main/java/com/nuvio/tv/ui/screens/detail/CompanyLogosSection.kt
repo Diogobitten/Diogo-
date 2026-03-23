@@ -85,8 +85,11 @@ private fun CompanyLogoCard(company: MetaCompany) {
         company.logo?.let { logo ->
             ImageRequest.Builder(context)
                 .data(logo)
-                .crossfade(true)
+                .crossfade(false)
+                .allowHardware(true)
                 .size(width = logoWidthPx, height = logoHeightPx)
+                .memoryCacheKey("${logo}_${logoWidthPx}x${logoHeightPx}")
+                .diskCacheKey("${logo}_${logoWidthPx}x${logoHeightPx}")
                 .build()
         }
     }

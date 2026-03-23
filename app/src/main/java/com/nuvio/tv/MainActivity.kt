@@ -146,7 +146,9 @@ data class DrawerItem(
     val route: String,
     val label: String,
     val iconRes: Int? = null,
-    val icon: ImageVector? = null
+    val icon: ImageVector? = null,
+    val isDivider: Boolean = false,
+    val contentTypeFilter: String? = null
 )
 
 private data class MainUiPrefs(
@@ -213,6 +215,7 @@ class MainActivity : ComponentActivity() {
         installSplashScreen()
         super.onCreate(savedInstanceState)
         setContent {
+            var showIntroVideo by remember { mutableStateOf(true) }
             var hasSelectedProfileThisSession by remember { mutableStateOf(false) }
             var onboardingCompletedThisSession by remember { mutableStateOf(false) }
             var onboardingProfileSyncInProgress by remember { mutableStateOf(false) }
@@ -267,6 +270,11 @@ class MainActivity : ComponentActivity() {
             val mainUiPrefs by mainUiPrefsFlow.collectAsState(initial = MainUiPrefs(hasChosenLayout = null))
 
             NuvioTheme(appTheme = mainUiPrefs.theme, appFont = mainUiPrefs.font) {
+                // Intro video splash
+                if (showIntroVideo) {
+                    IntroVideoSplash(onFinished = { showIntroVideo = false })
+                    return@NuvioTheme
+                }
                 CompositionLocalProvider(
                     LocalBringIntoViewSpec provides NuvioScrollDefaults.smoothScrollSpec
                 ) {
@@ -381,24 +389,35 @@ class MainActivity : ComponentActivity() {
                     val rootRoutes = remember {
                         setOf(
                             Screen.Home.route,
+                            Screen.HomeMovies.route,
+                            Screen.HomeSeries.route,
                             Screen.Search.route,
                             Screen.Library.route,
+                            Screen.Calendar.route,
                             Screen.Settings.route,
                             Screen.AddonManager.route
                         )
                     }
 
                     val strNavHome = stringResource(R.string.nav_home)
+                    val strNavMovies = stringResource(R.string.nav_movies)
+                    val strNavSeries = stringResource(R.string.nav_series)
                     val strNavSearch = stringResource(R.string.nav_search)
                     val strNavLibrary = stringResource(R.string.nav_library)
+                    val strNavCalendar = stringResource(R.string.nav_calendar)
                     val strNavAddons = stringResource(R.string.nav_addons)
                     val strNavSettings = stringResource(R.string.nav_settings)
+                    val strNavDiobot = stringResource(R.string.nav_diobot)
                     val drawerItems = remember(
                         strNavHome,
+                        strNavMovies,
+                        strNavSeries,
                         strNavSearch,
                         strNavLibrary,
+                        strNavCalendar,
                         strNavAddons,
-                        strNavSettings
+                        strNavSettings,
+                        strNavDiobot
                     ) {
                         listOf(
                             DrawerItem(
@@ -407,14 +426,38 @@ class MainActivity : ComponentActivity() {
                                 icon = Icons.Default.Home
                             ),
                             DrawerItem(
+                                route = Screen.HomeMovies.route,
+                                label = strNavMovies,
+                                iconRes = R.raw.sidebar_movies,
+                                isDivider = true,
+                                contentTypeFilter = "movie"
+                            ),
+                            DrawerItem(
+                                route = Screen.HomeSeries.route,
+                                label = strNavSeries,
+                                iconRes = R.raw.sidebar_series,
+                                contentTypeFilter = "series"
+                            ),
+                            DrawerItem(
                                 route = Screen.Search.route,
                                 label = strNavSearch,
-                                iconRes = R.raw.sidebar_search
+                                iconRes = R.raw.sidebar_search,
+                                isDivider = true
+                            ),
+                            DrawerItem(
+                                route = Screen.Diobot.route,
+                                label = strNavDiobot,
+                                iconRes = R.raw.sidebar_diobot
                             ),
                             DrawerItem(
                                 route = Screen.Library.route,
                                 label = strNavLibrary,
                                 iconRes = R.raw.sidebar_library
+                            ),
+                            DrawerItem(
+                                route = Screen.Calendar.route,
+                                label = strNavCalendar,
+                                iconRes = R.raw.sidebar_calendar
                             ),
                             DrawerItem(
                                 route = Screen.AddonManager.route,
@@ -429,7 +472,9 @@ class MainActivity : ComponentActivity() {
                         )
                     }
                     val selectedDrawerRoute = drawerItems.firstOrNull { item ->
-                        currentRoute == item.route || currentRoute?.startsWith("${item.route}/") == true
+                        currentRoute == item.route
+                    }?.route ?: drawerItems.firstOrNull { item ->
+                        currentRoute?.startsWith("${item.route}/") == true
                     }?.route
                     val selectedDrawerItem = drawerItems.firstOrNull { it.route == selectedDrawerRoute } ?: drawerItems.first()
 
@@ -548,7 +593,7 @@ private fun LegacySidebarScaffold(
     }
 
     val closedDrawerWidth = if (sidebarCollapsed) 0.dp else 72.dp
-    val openDrawerWidth = 196.dp
+    val openDrawerWidth = 186.dp
 
     val focusManager = LocalFocusManager.current
     val contentFocusRequester = remember { FocusRequester() }
@@ -595,11 +640,12 @@ private fun LegacySidebarScaffold(
         drawerContent = { drawerValue ->
             if (showSidebar) {
                 val drawerWidth = if (drawerValue == DrawerValue.Open) openDrawerWidth else closedDrawerWidth
+                val drawerBg = if (drawerValue == DrawerValue.Open) NuvioColors.Background else Color.Transparent
                 Column(
                     modifier = Modifier
                         .fillMaxHeight()
                         .width(drawerWidth)
-                        .background(NuvioColors.Background)
+                        .background(drawerBg)
                         .padding(12.dp)
                         .selectableGroup()
                         .onPreviewKeyEvent { keyEvent ->
@@ -613,16 +659,16 @@ private fun LegacySidebarScaffold(
                         }
                 ) {
                     val isExpanded = drawerValue == DrawerValue.Open
-                    val itemWidth = if (isExpanded) 156.dp else 48.dp
+                    val itemWidth = if (isExpanded) 148.dp else 46.dp
 
                     if (isExpanded) {
-                        Spacer(modifier = Modifier.height(30.dp))
+                        Spacer(modifier = Modifier.height(26.dp))
                         if (showProfileSelector && activeProfileName.isNotEmpty()) {
                             var isProfileFocused by remember { mutableStateOf(false) }
                             val profileItemShape = RoundedCornerShape(32.dp)
-                            val profileLeadingInset = 18.dp
-                            val profileAvatarSize = 34.dp
-                            val profileLabelStart = 60.dp
+                            val profileLeadingInset = 12.dp
+                            val profileAvatarSize = 26.dp
+                            val profileLabelStart = 44.dp
                             val profileGapAfterAvatar =
                                 (profileLabelStart - profileLeadingInset - profileAvatarSize).coerceAtLeast(0.dp)
                             val profileBgColor by animateColorAsState(
@@ -636,7 +682,7 @@ private fun LegacySidebarScaffold(
                                 Row(
                                     modifier = Modifier
                                         .width(itemWidth)
-                                        .height(52.dp)
+                                        .height(38.dp)
                                         .clip(profileItemShape)
                                         .background(color = profileBgColor, shape = profileItemShape)
                                         .onFocusChanged { isProfileFocused = it.isFocused }
@@ -666,23 +712,31 @@ private fun LegacySidebarScaffold(
                             }
                         } else {
                             Image(
-                                painter = painterResource(id = R.drawable.app_logo_wordmark),
-                                contentDescription = "NuvioTV",
+                                painter = painterResource(id = R.drawable.dplus_logo),
+                                contentDescription = "Diogo+",
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(42.dp)
+                                    .height(48.dp)
                             )
                         }
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
                     }
 
                     Spacer(modifier = Modifier.weight(1f))
                     Column(
                         modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         drawerItems.forEach { item ->
+                            if (item.isDivider) {
+                                Box(
+                                    modifier = Modifier
+                                        .width(itemWidth * 0.8f)
+                                        .height(1.dp)
+                                        .background(NuvioColors.Border.copy(alpha = 0.3f))
+                                )
+                            }
                             LegacySidebarButton(
                                 label = item.label,
                                 iconRes = item.iconRes,
@@ -710,15 +764,9 @@ private fun LegacySidebarScaffold(
             }
         }
     ) {
-        val contentStartPadding by animateDpAsState(
-            targetValue = if (showSidebar) closedDrawerWidth else 0.dp,
-            animationSpec = tween(350),
-            label = "contentStartPadding"
-        )
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(start = contentStartPadding)
                 .onKeyEvent { keyEvent ->
                     if (
                         showSidebar &&
@@ -793,7 +841,7 @@ private fun LegacySidebarButton(
 
     Box(
         modifier = modifier
-            .height(52.dp)
+            .height(38.dp)
             .focusProperties { canFocus = expanded }
             .clip(itemShape)
             .background(color = backgroundColor, shape = itemShape)
@@ -806,12 +854,12 @@ private fun LegacySidebarButton(
             tint = iconTint,
             modifier = if (expanded) {
                 Modifier
-                    .size(22.dp)
+                    .size(16.dp)
                     .align(Alignment.CenterStart)
-                    .offset(x = 18.dp)
+                    .offset(x = 12.dp)
             } else {
                 Modifier
-                    .size(22.dp)
+                    .size(16.dp)
                     .align(Alignment.Center)
             }
         )
@@ -822,10 +870,11 @@ private fun LegacySidebarButton(
                 maxLines = 1,
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                 textAlign = TextAlign.Start,
+                style = androidx.tv.material3.MaterialTheme.typography.titleSmall,
                 modifier = Modifier
                     .align(Alignment.CenterStart)
                     .fillMaxWidth()
-                    .padding(start = 54.dp, end = 14.dp)
+                    .padding(start = 36.dp, end = 10.dp)
             )
         }
     }
@@ -851,8 +900,8 @@ private fun ModernSidebarScaffold(
     onExitApp: () -> Unit
 ) {
     val showSidebar = currentRoute in rootRoutes
-    val collapsedSidebarWidth = if (sidebarCollapsed) 0.dp else 184.dp
-    val openSidebarWidth = 262.dp
+    val collapsedSidebarWidth = if (sidebarCollapsed) 0.dp else 164.dp
+    val openSidebarWidth = 230.dp
 
     val focusManager = LocalFocusManager.current
     val contentFocusRequester = remember { FocusRequester() }
@@ -1381,3 +1430,93 @@ private fun rememberRawSvgPainter(rawIconRes: Int): Painter = rememberAsyncImage
         .decoderFactory(SvgDecoder.Factory())
         .build()
 )
+
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+@Composable
+private fun IntroVideoSplash(onFinished: () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val currentOnFinished by androidx.compose.runtime.rememberUpdatedState(onFinished)
+    var dismissed by remember { mutableStateOf(false) }
+
+    val player = remember {
+        runCatching {
+            androidx.media3.exoplayer.ExoPlayer.Builder(context).build().apply {
+                val uri = android.net.Uri.parse("android.resource://${context.packageName}/${R.raw.dplus}")
+                setMediaItem(androidx.media3.common.MediaItem.fromUri(uri))
+                repeatMode = androidx.media3.common.Player.REPEAT_MODE_OFF
+                volume = 1f
+                playWhenReady = true
+                prepare()
+            }
+        }.getOrNull()
+    }
+
+    // Safety timeout — skip intro after 15s max even if video hangs
+    LaunchedEffect(Unit) {
+        delay(15_000)
+        if (!dismissed) {
+            dismissed = true
+            currentOnFinished()
+        }
+    }
+
+    // If player failed to create, skip immediately
+    LaunchedEffect(player) {
+        if (player == null) {
+            dismissed = true
+            currentOnFinished()
+        }
+    }
+
+    if (player != null) {
+        androidx.compose.runtime.DisposableEffect(player) {
+            val listener = object : androidx.media3.common.Player.Listener {
+                override fun onPlaybackStateChanged(playbackState: Int) {
+                    if (playbackState == androidx.media3.common.Player.STATE_ENDED && !dismissed) {
+                        dismissed = true
+                        currentOnFinished()
+                    }
+                }
+
+                override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                    if (!dismissed) {
+                        dismissed = true
+                        currentOnFinished()
+                    }
+                }
+            }
+            player.addListener(listener)
+            onDispose {
+                player.removeListener(listener)
+                runCatching { player.stop() }
+                runCatching { player.release() }
+            }
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black),
+        contentAlignment = Alignment.Center
+    ) {
+        if (player != null) {
+            androidx.compose.ui.viewinterop.AndroidView(
+                factory = { ctx ->
+                    (android.view.LayoutInflater.from(ctx)
+                        .inflate(R.layout.trailer_player_view, null) as androidx.media3.ui.PlayerView).apply {
+                        this.player = player
+                        useController = false
+                        resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        scaleX = 1.15f
+                        scaleY = 1.15f
+                    }
+            )
+        }
+    }
+}

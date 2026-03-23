@@ -98,6 +98,7 @@ fun HeroContentSection(
     mdbListRatings: MDBListRatings? = null,
     hideMetaInfoImdb: Boolean = false,
     isTrailerPlaying: Boolean = false,
+    isAmbientTrailer: Boolean = false,
     playButtonFocusRequester: FocusRequester? = null,
     restorePlayFocusToken: Int = 0,
     onHeroActionFocused: () -> Unit = {},
@@ -111,16 +112,21 @@ fun HeroContentSection(
         meta.logo?.let { logo ->
             ImageRequest.Builder(context)
                 .data(logo)
-                .crossfade(true)
+                .crossfade(false)
+                .allowHardware(true)
+                .memoryCacheKey("logo_$logo")
+                .diskCacheKey("logo_$logo")
                 .decoderFactory(SvgDecoder.Factory())
                 .build()
         }
     }
     var logoLoadFailed by remember(meta.logo) { mutableStateOf(false) }
+    // During ambient trailer, treat as not playing for UI purposes (buttons/title stay visible)
+    val effectiveTrailerPlaying = isTrailerPlaying && !isAmbientTrailer
     val shouldShowLogo =
         !meta.logo.isNullOrBlank() &&
             !logoLoadFailed &&
-            !(isTrailerPlaying && hideLogoDuringTrailer)
+            !(effectiveTrailerPlaying && hideLogoDuringTrailer)
     val libraryAddPainter = rememberRawSvgPainter(
         context = context,
         rawRes = com.nuvio.tv.R.raw.library_add_plus
@@ -146,17 +152,17 @@ fun HeroContentSection(
 
     // Animate logo properties for trailer mode
     val logoHeight by animateDpAsState(
-        targetValue = if (isTrailerPlaying) 60.dp else 100.dp,
+        targetValue = if (effectiveTrailerPlaying) 60.dp else 100.dp,
         animationSpec = tween(600),
         label = "logoHeight"
     )
     val logoBottomPadding by animateDpAsState(
-        targetValue = if (isTrailerPlaying) 24.dp else 16.dp,
+        targetValue = if (effectiveTrailerPlaying) 24.dp else 16.dp,
         animationSpec = tween(600),
         label = "logoPadding"
     )
     val logoMaxWidth by animateFloatAsState(
-        targetValue = if (isTrailerPlaying) 0.25f else 0.4f,
+        targetValue = if (effectiveTrailerPlaying) 0.25f else 0.4f,
         animationSpec = tween(600),
         label = "logoWidth"
     )
@@ -190,7 +196,7 @@ fun HeroContentSection(
             } else {
                 // Text title hides entirely during trailer
                 AnimatedVisibility(
-                    visible = !isTrailerPlaying,
+                    visible = !effectiveTrailerPlaying,
                     enter = fadeIn(tween(400)),
                     exit = fadeOut(tween(400))
                 ) {
@@ -205,7 +211,7 @@ fun HeroContentSection(
 
             // Everything below the logo fades out during trailer
             AnimatedVisibility(
-                visible = isTrailerPlaying && !hideLogoDuringTrailer,
+                visible = effectiveTrailerPlaying && !hideLogoDuringTrailer,
                 enter = fadeIn(tween(600)),
                 exit = fadeOut(tween(300))
             ) {
@@ -219,7 +225,7 @@ fun HeroContentSection(
 
             // Everything below the logo fades out during trailer
             AnimatedVisibility(
-                visible = !isTrailerPlaying,
+                visible = !effectiveTrailerPlaying,
                 enter = fadeIn(tween(400)),
                 exit = fadeOut(tween(400))
             ) {

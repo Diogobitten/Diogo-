@@ -17,7 +17,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Text
+import androidx.compose.runtime.remember
 import coil.compose.AsyncImage
+import coil.decode.SvgDecoder
 import coil.request.ImageRequest
 
 @Composable
@@ -49,10 +51,14 @@ fun ProfileAvatarCircle(
         contentAlignment = Alignment.Center
     ) {
         if (avatarImageUrl != null) {
+            val isSvg = remember(avatarImageUrl) { avatarImageUrl.contains("/svg") }
             AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
                     .data(avatarImageUrl)
                     .crossfade(true)
+                    .apply {
+                        if (isSvg) decoderFactory(SvgDecoder.Factory())
+                    }
                     .build(),
                 contentDescription = name,
                 modifier = Modifier

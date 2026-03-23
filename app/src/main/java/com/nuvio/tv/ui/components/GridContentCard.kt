@@ -125,8 +125,8 @@ fun GridContentCard(
                 },
             shape = CardDefaults.shape(shape = cardShape),
             colors = CardDefaults.colors(
-                containerColor = NuvioColors.BackgroundCard,
-                focusedContainerColor = NuvioColors.BackgroundCard
+                containerColor = Color.Transparent,
+                focusedContainerColor = Color.Transparent
             ),
             border = CardDefaults.border(
                 focusedBorder = Border(
@@ -146,8 +146,10 @@ fun GridContentCard(
                     ImageRequest.Builder(context)
                         .data(item.poster)
                         .crossfade(imageCrossfade)
+                        .allowHardware(true)
                         .size(width = requestWidthPx, height = requestHeightPx)
                         .memoryCacheKey("${item.poster}_${requestWidthPx}x${requestHeightPx}")
+                        .diskCacheKey("${item.poster}_${requestWidthPx}x${requestHeightPx}")
                         .build()
                 }
                 if (item.poster.isNullOrBlank()) {

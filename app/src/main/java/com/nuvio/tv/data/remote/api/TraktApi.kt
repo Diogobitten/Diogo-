@@ -1,5 +1,7 @@
 package com.nuvio.tv.data.remote.api
 
+import com.nuvio.tv.data.remote.dto.trakt.TraktCalendarShowDto
+import com.nuvio.tv.data.remote.dto.trakt.TraktCalendarMovieDto
 import com.nuvio.tv.data.remote.dto.trakt.TraktDeviceCodeRequestDto
 import com.nuvio.tv.data.remote.dto.trakt.TraktDeviceCodeResponseDto
 import com.nuvio.tv.data.remote.dto.trakt.TraktDeviceTokenRequestDto
@@ -24,6 +26,16 @@ import com.nuvio.tv.data.remote.dto.trakt.TraktScrobbleResponseDto
 import com.nuvio.tv.data.remote.dto.trakt.TraktSeasonDto
 import com.nuvio.tv.data.remote.dto.trakt.TraktShowProgressResponseDto
 import com.nuvio.tv.data.remote.dto.trakt.TraktTokenResponseDto
+import com.nuvio.tv.data.remote.dto.trakt.TraktTrendingMovieDto
+import com.nuvio.tv.data.remote.dto.trakt.TraktTrendingShowDto
+import com.nuvio.tv.data.remote.dto.trakt.TraktPopularMovieDto
+import com.nuvio.tv.data.remote.dto.trakt.TraktPopularShowDto
+import com.nuvio.tv.data.remote.dto.trakt.TraktAnticipatedMovieDto
+import com.nuvio.tv.data.remote.dto.trakt.TraktAnticipatedShowDto
+import com.nuvio.tv.data.remote.dto.trakt.TraktRecommendedMovieDto
+import com.nuvio.tv.data.remote.dto.trakt.TraktRecommendedShowDto
+import com.nuvio.tv.data.remote.dto.trakt.TraktMovieDto
+import com.nuvio.tv.data.remote.dto.trakt.TraktShowDto
 import com.nuvio.tv.data.remote.dto.trakt.TraktUserEpisodeHistoryItemDto
 import com.nuvio.tv.data.remote.dto.trakt.TraktUserSettingsResponseDto
 import com.nuvio.tv.data.remote.dto.trakt.TraktUserStatsResponseDto
@@ -230,4 +242,68 @@ interface TraktApi {
         @Header("Authorization") authorization: String,
         @Body body: TraktListItemsMutationRequestDto
     ): Response<TraktListItemsMutationResponseDto>
+
+    @GET("calendars/my/shows/{start_date}/{days}")
+    suspend fun getMyCalendarShows(
+        @Header("Authorization") authorization: String,
+        @Path("start_date") startDate: String,
+        @Path("days") days: Int
+    ): Response<List<TraktCalendarShowDto>>
+
+    @GET("calendars/my/movies/{start_date}/{days}")
+    suspend fun getMyCalendarMovies(
+        @Header("Authorization") authorization: String,
+        @Path("start_date") startDate: String,
+        @Path("days") days: Int
+    ): Response<List<TraktCalendarMovieDto>>
+
+    // ── Discovery endpoints ──
+
+    @GET("movies/trending")
+    suspend fun getTrendingMovies(
+        @Query("page") page: Int = 1,
+        @Query("limit") limit: Int = 20
+    ): Response<List<TraktTrendingMovieDto>>
+
+    @GET("shows/trending")
+    suspend fun getTrendingShows(
+        @Query("page") page: Int = 1,
+        @Query("limit") limit: Int = 20
+    ): Response<List<TraktTrendingShowDto>>
+
+    @GET("movies/popular")
+    suspend fun getPopularMovies(
+        @Query("page") page: Int = 1,
+        @Query("limit") limit: Int = 20
+    ): Response<List<TraktMovieDto>>
+
+    @GET("shows/popular")
+    suspend fun getPopularShows(
+        @Query("page") page: Int = 1,
+        @Query("limit") limit: Int = 20
+    ): Response<List<TraktShowDto>>
+
+    @GET("movies/anticipated")
+    suspend fun getAnticipatedMovies(
+        @Query("page") page: Int = 1,
+        @Query("limit") limit: Int = 20
+    ): Response<List<TraktAnticipatedMovieDto>>
+
+    @GET("shows/anticipated")
+    suspend fun getAnticipatedShows(
+        @Query("page") page: Int = 1,
+        @Query("limit") limit: Int = 20
+    ): Response<List<TraktAnticipatedShowDto>>
+
+    @GET("recommendations/movies")
+    suspend fun getRecommendedMovies(
+        @Header("Authorization") authorization: String,
+        @Query("limit") limit: Int = 20
+    ): Response<List<TraktMovieDto>>
+
+    @GET("recommendations/shows")
+    suspend fun getRecommendedShows(
+        @Header("Authorization") authorization: String,
+        @Query("limit") limit: Int = 20
+    ): Response<List<TraktShowDto>>
 }

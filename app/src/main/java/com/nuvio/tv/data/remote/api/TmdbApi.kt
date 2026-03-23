@@ -140,6 +140,69 @@ interface TmdbApi {
         @Query("api_key") apiKey: String,
         @Query("language") language: String? = null
     ): Response<TmdbPersonCreditsResponse>
+
+    @GET("person/popular")
+    suspend fun getPopularPeople(
+        @Query("api_key") apiKey: String,
+        @Query("language") language: String = "en-US",
+        @Query("page") page: Int = 1
+    ): Response<TmdbPopularPeopleResponse>
+
+    @GET("discover/movie")
+    suspend fun discoverMovies(
+        @Query("api_key") apiKey: String,
+        @Query("with_genres") withGenres: String? = null,
+        @Query("sort_by") sortBy: String = "popularity.desc",
+        @Query("language") language: String = "en-US",
+        @Query("page") page: Int = 1
+    ): Response<TmdbDiscoverResponse>
+
+    @GET("discover/tv")
+    suspend fun discoverTv(
+        @Query("api_key") apiKey: String,
+        @Query("with_genres") withGenres: String? = null,
+        @Query("sort_by") sortBy: String = "popularity.desc",
+        @Query("language") language: String = "en-US",
+        @Query("page") page: Int = 1
+    ): Response<TmdbDiscoverResponse>
+
+    @GET("search/multi")
+    suspend fun searchMulti(
+        @Query("api_key") apiKey: String,
+        @Query("query") query: String,
+        @Query("language") language: String = "pt-BR",
+        @Query("page") page: Int = 1
+    ): Response<TmdbSearchMultiResponse>
+
+    @GET("trending/movie/week")
+    suspend fun getTrendingMovies(
+        @Query("api_key") apiKey: String,
+        @Query("language") language: String = "pt-BR",
+        @Query("page") page: Int = 1
+    ): Response<TmdbSearchMultiResponse>
+
+    @GET("trending/tv/week")
+    suspend fun getTrendingTv(
+        @Query("api_key") apiKey: String,
+        @Query("language") language: String = "pt-BR",
+        @Query("page") page: Int = 1
+    ): Response<TmdbSearchMultiResponse>
+
+    @GET("movie/now_playing")
+    suspend fun getNowPlayingMovies(
+        @Query("api_key") apiKey: String,
+        @Query("language") language: String = "pt-BR",
+        @Query("region") region: String = "BR",
+        @Query("page") page: Int = 1
+    ): Response<TmdbSearchMultiResponse>
+
+    @GET("movie/upcoming")
+    suspend fun getUpcomingMovies(
+        @Query("api_key") apiKey: String,
+        @Query("language") language: String = "pt-BR",
+        @Query("region") region: String = "BR",
+        @Query("page") page: Int = 1
+    ): Response<TmdbSearchMultiResponse>
 }
 
 @JsonClass(generateAdapter = true)
@@ -207,6 +270,7 @@ data class TmdbDetailsResponse(
     @Json(name = "poster_path") val posterPath: String? = null,
     @Json(name = "last_air_date") val lastAirDate: String? = null,
     @Json(name = "status") val status: String? = null,
+    @Json(name = "number_of_seasons") val numberOfSeasons: Int? = null,
     @Json(name = "belongs_to_collection") val belongsToCollection: TmdbCollectionSummary? = null
 )
 
@@ -277,7 +341,9 @@ data class TmdbMovieReleaseDateCountry(
 
 @JsonClass(generateAdapter = true)
 data class TmdbMovieReleaseDateItem(
-    @Json(name = "certification") val certification: String? = null
+    @Json(name = "certification") val certification: String? = null,
+    @Json(name = "release_date") val releaseDate: String? = null,
+    @Json(name = "type") val type: Int? = null
 )
 
 @JsonClass(generateAdapter = true)
@@ -423,5 +489,68 @@ data class TmdbCollectionSummary(
     @Json(name = "name") val name: String? = null,
     @Json(name = "poster_path") val posterPath: String? = null,
     @Json(name = "backdrop_path") val backdropPath: String? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class TmdbPopularPeopleResponse(
+    @Json(name = "page") val page: Int,
+    @Json(name = "results") val results: List<TmdbPopularPerson>? = null,
+    @Json(name = "total_pages") val totalPages: Int? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class TmdbPopularPerson(
+    @Json(name = "id") val id: Int,
+    @Json(name = "name") val name: String? = null,
+    @Json(name = "profile_path") val profilePath: String? = null,
+    @Json(name = "known_for_department") val knownForDepartment: String? = null,
+    @Json(name = "known_for") val knownFor: List<TmdbPopularPersonKnownFor>? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class TmdbPopularPersonKnownFor(
+    @Json(name = "media_type") val mediaType: String? = null,
+    @Json(name = "title") val title: String? = null,
+    @Json(name = "name") val name: String? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class TmdbDiscoverResponse(
+    @Json(name = "page") val page: Int,
+    @Json(name = "results") val results: List<TmdbDiscoverItem>? = null,
+    @Json(name = "total_pages") val totalPages: Int? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class TmdbDiscoverItem(
+    @Json(name = "id") val id: Int,
+    @Json(name = "title") val title: String? = null,
+    @Json(name = "name") val name: String? = null,
+    @Json(name = "poster_path") val posterPath: String? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class TmdbSearchMultiResponse(
+    @Json(name = "page") val page: Int = 1,
+    @Json(name = "results") val results: List<TmdbSearchMultiResult>? = null,
+    @Json(name = "total_results") val totalResults: Int? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class TmdbSearchMultiResult(
+    @Json(name = "id") val id: Int,
+    @Json(name = "media_type") val mediaType: String? = null,
+    @Json(name = "title") val title: String? = null,
+    @Json(name = "name") val name: String? = null,
+    @Json(name = "overview") val overview: String? = null,
+    @Json(name = "release_date") val releaseDate: String? = null,
+    @Json(name = "first_air_date") val firstAirDate: String? = null,
+    @Json(name = "vote_average") val voteAverage: Double? = null,
+    @Json(name = "vote_count") val voteCount: Int? = null,
+    @Json(name = "poster_path") val posterPath: String? = null,
+    @Json(name = "backdrop_path") val backdropPath: String? = null,
+    @Json(name = "genre_ids") val genreIds: List<Int>? = null,
+    @Json(name = "original_language") val originalLanguage: String? = null,
+    @Json(name = "popularity") val popularity: Double? = null
 )
 

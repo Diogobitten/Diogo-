@@ -47,6 +47,7 @@ fun TrailerPlayer(
     onEnded: () -> Unit,
     onFirstFrameRendered: () -> Unit = {},
     muted: Boolean = false,
+    initialSeekMs: Long = 0L,
     seekRequestToken: Int = 0,
     seekDeltaMs: Long = 0L,
     onProgressChanged: (positionMs: Long, durationMs: Long) -> Unit = { _, _ -> },
@@ -68,7 +69,7 @@ fun TrailerPlayer(
     val currentOnProgressChanged by rememberUpdatedState(onProgressChanged)
     val currentOnRemoteKey by rememberUpdatedState(onRemoteKey)
     val zoomScale = if (cropToFill) overscanZoom.coerceAtLeast(1f) else 1f
-    var hasRenderedFirstFrame by remember(trailerUrl) { mutableStateOf(false) }
+    var hasRenderedFirstFrame by remember(trailerUrl, trailerAudioUrl) { mutableStateOf(false) }
     val playerAlphaState = animateFloatAsState(
         targetValue = if (isPlaying && hasRenderedFirstFrame) 1f else 0f,
         animationSpec = tween(durationMillis = 300),
@@ -104,20 +105,23 @@ fun TrailerPlayer(
     }
     val releaseCalled = remember(trailerPlayer) { AtomicBoolean(false) }
 
-    LaunchedEffect(isPlaying, trailerUrl, trailerAudioUrl, muted) {
+    LaunchedEffect(isPlaying, trailerUrl, trailerAudioUrl, muted, initialSeekMs) {
         val player = trailerPlayer ?: return@LaunchedEffect
         player.volume = if (muted) 0f else 1f
         if (isPlaying && trailerUrl != null) {
             hasRenderedFirstFrame = false
+            val mediaSourceFactory = DefaultMediaSourceFactory(YoutubeChunkedDataSourceFactory())
             if (!trailerAudioUrl.isNullOrBlank()) {
-                val mediaSourceFactory = DefaultMediaSourceFactory(YoutubeChunkedDataSourceFactory())
                 val videoSource = mediaSourceFactory.createMediaSource(MediaItem.fromUri(trailerUrl))
                 val audioSource = mediaSourceFactory.createMediaSource(MediaItem.fromUri(trailerAudioUrl))
                 player.setMediaSource(MergingMediaSource(videoSource, audioSource))
             } else {
-                player.setMediaItem(MediaItem.fromUri(trailerUrl))
+                player.setMediaSource(mediaSourceFactory.createMediaSource(MediaItem.fromUri(trailerUrl)))
             }
             player.prepare()
+            if (initialSeekMs > 0L) {
+                player.seekTo(initialSeekMs)
+            }
             player.playWhenReady = true
         } else {
             hasRenderedFirstFrame = false
@@ -174,13 +178,13 @@ fun TrailerPlayer(
                 Lifecycle.Event.ON_RESUME -> {
                     if (currentIsPlaying && !currentTrailerUrl.isNullOrBlank()) {
                         if (player.currentMediaItem == null) {
+                            val mediaSourceFactory = DefaultMediaSourceFactory(YoutubeChunkedDataSourceFactory())
                             if (!currentTrailerAudioUrl.isNullOrBlank()) {
-                                val mediaSourceFactory = DefaultMediaSourceFactory(YoutubeChunkedDataSourceFactory())
                                 val videoSource = mediaSourceFactory.createMediaSource(MediaItem.fromUri(currentTrailerUrl!!))
                                 val audioSource = mediaSourceFactory.createMediaSource(MediaItem.fromUri(currentTrailerAudioUrl!!))
                                 player.setMediaSource(MergingMediaSource(videoSource, audioSource))
                             } else {
-                                player.setMediaItem(MediaItem.fromUri(currentTrailerUrl!!))
+                                player.setMediaSource(mediaSourceFactory.createMediaSource(MediaItem.fromUri(currentTrailerUrl!!)))
                             }
                             player.prepare()
                         }

@@ -14,9 +14,11 @@ import com.nuvio.tv.core.qr.QrCodeGenerator
 import com.nuvio.tv.core.sync.AddonSyncService
 import com.nuvio.tv.core.sync.LibrarySyncService
 import com.nuvio.tv.core.sync.PluginSyncService
+import com.nuvio.tv.core.sync.ProfileSyncService
 import com.nuvio.tv.core.sync.WatchProgressSyncService
 import com.nuvio.tv.core.sync.WatchedItemsSyncService
 import com.nuvio.tv.data.local.LibraryPreferences
+import com.nuvio.tv.data.local.ProfileDataStore
 import com.nuvio.tv.data.local.WatchedItemsPreferences
 import com.nuvio.tv.data.local.TraktAuthDataStore
 import com.nuvio.tv.data.local.WatchProgressPreferences
@@ -52,6 +54,7 @@ class AccountViewModel @Inject constructor(
     private val watchProgressSyncService: WatchProgressSyncService,
     private val librarySyncService: LibrarySyncService,
     private val watchedItemsSyncService: WatchedItemsSyncService,
+    private val profileSyncService: ProfileSyncService,
     private val pluginManager: PluginManager,
     private val addonRepository: AddonRepositoryImpl,
     private val watchProgressRepository: WatchProgressRepositoryImpl,
@@ -62,6 +65,7 @@ class AccountViewModel @Inject constructor(
     private val traktAuthDataStore: TraktAuthDataStore,
     private val postgrest: Postgrest,
     private val profileManager: ProfileManager,
+    private val profileDataStore: ProfileDataStore,
     @dagger.hilt.android.qualifiers.ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -208,8 +212,19 @@ class AccountViewModel @Inject constructor(
 
     fun signOut() {
         viewModelScope.launch {
+            // Clear local synced data before signing out
+            try {
+                watchProgressPreferences.clearAll()
+                libraryPreferences.clearAll()
+                watchedItemsPreferences.clearAll()
+                profileDataStore.resetToDefault()
+                profileManager.setActiveProfile(1)
+            } catch (e: Exception) {
+                Log.e("AccountViewModel", "Failed to clear local data on sign out", e)
+            }
+            stopLocalAuthServer()
             authManager.signOut()
-            _uiState.update { it.copy(connectedStats = null, isStatsLoading = false) }
+            _uiState.update { it.copy(connectedStats = null, isStatsLoading = false, syncOverview = null) }
         }
     }
 
@@ -243,64 +258,115 @@ class AccountViewModel @Inject constructor(
         _uiState.update { it.copy(generatedSyncCode = null) }
     }
 
+    private var authLoginServer: com.nuvio.tv.core.server.AuthLoginServer? = null
+    private var localAuthJob: Job? = null
+
     fun startQrLogin() {
         viewModelScope.launch {
+            Log.d("AccountViewModel", "startQrLogin: starting, current server=${authLoginServer?.listeningPort}")
             cancelQrLoginPolling()
-            val nonce = generateDeviceNonce()
+            stopLocalAuthServer()
             _uiState.update {
                 it.copy(
                     isLoading = true,
                     error = null,
                     qrLoginCode = null,
                     qrLoginUrl = null,
-                    qrLoginNonce = nonce,
+                    qrLoginNonce = null,
                     qrLoginBitmap = null,
-                    qrLoginStatus = "Preparing QR login...",
+                    qrLoginStatus = "Preparando login...",
                     qrLoginExpiresAtMillis = null
                 )
             }
-            authManager.ensureQrSessionAuthenticated().onFailure { e ->
+
+            // Use local HTTP server for login
+            val deviceIp = com.nuvio.tv.core.server.DeviceIpAddress.get(context)
+            if (deviceIp == null) {
                 _uiState.update {
                     it.copy(
                         isLoading = false,
-                        error = userFriendlyError(e),
-                        qrLoginStatus = "Failed to authenticate device"
+                        error = "Não foi possível obter o IP do dispositivo. Verifique a conexão Wi-Fi.",
+                        qrLoginStatus = "Sem conexão de rede"
                     )
                 }
                 return@launch
             }
-            authManager.startTvLoginSession(
-                deviceNonce = nonce,
-                deviceName = Build.MODEL,
-                redirectBaseUrl = BuildConfig.TV_LOGIN_WEB_BASE_URL
-            ).fold(
-                onSuccess = { result ->
-                    val expiresAtMillis = runCatching { Instant.parse(result.expiresAt).toEpochMilli() }.getOrNull()
-                    val qrBitmap = runCatching { QrCodeGenerator.generate(result.webUrl, 420) }.getOrNull()
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            qrLoginCode = result.code,
-                            qrLoginUrl = result.webUrl,
-                            qrLoginBitmap = qrBitmap,
-                            qrLoginStatus = "Scan QR and sign in on your phone",
-                            qrLoginExpiresAtMillis = expiresAtMillis,
-                            qrLoginPollIntervalSeconds = result.pollIntervalSeconds.coerceAtLeast(2)
-                        )
+
+            val server = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                com.nuvio.tv.core.server.AuthLoginServer.startOnAvailablePort(
+                    supabaseUrl = BuildConfig.SUPABASE_URL,
+                    supabaseAnonKey = BuildConfig.SUPABASE_ANON_KEY
+                )
+            }
+            if (server == null) {
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        error = "Não foi possível iniciar o servidor de login.",
+                        qrLoginStatus = "Erro ao iniciar servidor"
+                    )
+                }
+                return@launch
+            }
+            authLoginServer = server
+            val loginUrl = "http://$deviceIp:${server.listeningPort}"
+            Log.d("AccountViewModel", "startQrLogin: server started at $loginUrl, isAlive=${server.isAlive}")
+            val qrBitmap = runCatching { QrCodeGenerator.generate(loginUrl, 420) }.getOrNull()
+
+            _uiState.update {
+                it.copy(
+                    isLoading = false,
+                    qrLoginCode = loginUrl,
+                    qrLoginUrl = loginUrl,
+                    qrLoginBitmap = qrBitmap,
+                    qrLoginStatus = "Escaneie o QR code e faça login pelo celular",
+                    qrLoginExpiresAtMillis = null
+                )
+            }
+
+            // Poll the local server for auth tokens
+            Log.d("AccountViewModel", "startQrLogin: server isAlive=${server.isAlive}, starting token poll")
+            localAuthJob = viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                val tokens = server.awaitTokens(timeoutSeconds = 300)
+                if (tokens != null) {
+                    try {
+                        authManager.importSession(tokens.accessToken, tokens.refreshToken)
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                            pullRemoteData().onFailure { e ->
+                                Log.e("AccountViewModel", "Local auth: pullRemoteData failed", e)
+                            }
+                            loadConnectedStats()
+                            _uiState.update { it.copy(qrLoginStatus = "Login realizado com sucesso!") }
+                        }
+                    } catch (e: Exception) {
+                        Log.e("AccountViewModel", "Failed to import local auth session", e)
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                            _uiState.update {
+                                it.copy(error = "Erro ao importar sessão: ${e.message}")
+                            }
+                        }
                     }
-                    startQrLoginPolling()
-                },
-                onFailure = { e ->
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            error = userFriendlyError(e),
-                            qrLoginStatus = "Failed to start QR login"
-                        )
+                } else {
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        _uiState.update {
+                            it.copy(qrLoginStatus = "Tempo esgotado. Tente novamente.")
+                        }
                     }
                 }
-            )
+                stopLocalAuthServer()
+            }
         }
+    }
+
+    private fun stopLocalAuthServer() {
+        // Stop the HTTP server first to release the port
+        val port = authLoginServer?.listeningPort
+        runCatching { authLoginServer?.stop() }
+        authLoginServer = null
+        Log.d("AccountViewModel", "stopLocalAuthServer: stopped server on port $port")
+        // Then cancel the polling job
+        localAuthJob?.cancel()
+        localAuthJob = null
     }
 
     fun pollQrLogin() {
@@ -338,6 +404,7 @@ class AccountViewModel @Inject constructor(
 
     fun clearQrLoginSession() {
         cancelQrLoginPolling()
+        stopLocalAuthServer()
         _uiState.update {
             it.copy(
                 qrLoginCode = null,
@@ -572,6 +639,7 @@ class AccountViewModel @Inject constructor(
         watchProgressSyncService.pushToRemote()
         librarySyncService.pushToRemote()
         watchedItemsSyncService.pushToRemote()
+        profileSyncService.pushToRemote()
     }
 
     private suspend fun pullRemoteData(): Result<Unit> {
@@ -591,6 +659,16 @@ class AccountViewModel @Inject constructor(
                 removeMissingLocal = true
             )
             addonRepository.isSyncingFromRemote = false
+
+            // Pull profiles from remote (restores profiles after sign-out/sign-in)
+            profileSyncService.pullFromRemote().fold(
+                onSuccess = { remoteProfiles ->
+                    Log.d("AccountViewModel", "pullRemoteData: pulled ${remoteProfiles.size} profiles")
+                },
+                onFailure = { e ->
+                    Log.e("AccountViewModel", "pullRemoteData: failed to pull profiles", e)
+                }
+            )
 
             val isPrimaryProfile = profileManager.activeProfileId.value == 1
             val isTraktConnected = isPrimaryProfile && traktAuthDataStore.isAuthenticated.first()
@@ -649,6 +727,7 @@ class AccountViewModel @Inject constructor(
 
     override fun onCleared() {
         cancelQrLoginPolling()
+        stopLocalAuthServer()
         super.onCleared()
     }
 }

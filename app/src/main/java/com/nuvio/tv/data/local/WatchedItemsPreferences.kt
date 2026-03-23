@@ -99,6 +99,12 @@ class WatchedItemsPreferences @Inject constructor(
         return allItems.first()
     }
 
+    suspend fun clearAll() {
+        store().edit { preferences ->
+            preferences.remove(watchedItemsKey)
+        }
+    }
+
     suspend fun mergeRemoteItems(remoteItems: List<WatchedItem>) {
         store().edit { preferences ->
             val current = preferences[watchedItemsKey] ?: emptySet()

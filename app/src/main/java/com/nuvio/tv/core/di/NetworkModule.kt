@@ -14,6 +14,7 @@ import com.nuvio.tv.data.remote.api.TrailerApi
 import com.nuvio.tv.data.remote.api.IntroDbApi
 import com.nuvio.tv.data.remote.api.ImdbTapframeApi
 import com.nuvio.tv.data.remote.api.MDBListApi
+import com.nuvio.tv.data.remote.api.OpenAiApi
 import com.nuvio.tv.data.remote.api.ParentalGuideApi
 import com.nuvio.tv.data.remote.api.SeriesGraphApi
 import com.nuvio.tv.data.remote.api.TmdbApi
@@ -365,4 +366,21 @@ object NetworkModule {
     @Singleton
     fun provideImdbTapframeApi(@Named("imdbTapframe") retrofit: Retrofit): ImdbTapframeApi =
         retrofit.create(ImdbTapframeApi::class.java)
+
+    // --- OpenAI API (Diobot AI Concierge) ---
+
+    @Provides
+    @Singleton
+    @Named("openai")
+    fun provideOpenAiRetrofit(okHttpClient: OkHttpClient, moshi: Moshi): Retrofit =
+        Retrofit.Builder()
+            .baseUrl("https://api.openai.com/v1/")
+            .client(okHttpClient)
+            .addConverterFactory(MoshiConverterFactory.create(moshi))
+            .build()
+
+    @Provides
+    @Singleton
+    fun provideOpenAiApi(@Named("openai") retrofit: Retrofit): OpenAiApi =
+        retrofit.create(OpenAiApi::class.java)
 }

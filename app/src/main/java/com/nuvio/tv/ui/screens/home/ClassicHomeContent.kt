@@ -30,7 +30,9 @@ import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.ui.components.CatalogRowSection
 import com.nuvio.tv.ui.components.ContinueWatchingSection
 import com.nuvio.tv.ui.components.HeroCarousel
+import com.nuvio.tv.ui.components.NewReleasesSection
 import com.nuvio.tv.ui.components.PosterCardStyle
+import com.nuvio.tv.ui.components.StreamingServicesRow
 
 /** Minimum interval between processed key repeat events to prevent HWUI overload. */
 private const val KEY_REPEAT_THROTTLE_MS = 80L
@@ -59,13 +61,15 @@ fun ClassicHomeContent(
     onCatalogItemLongPress: (MetaPreview, String) -> Unit = { _, _ -> },
     onRequestTrailerPreview: (MetaPreview) -> Unit,
     onItemFocus: (MetaPreview) -> Unit = {},
+    onNewReleaseClick: (com.nuvio.tv.domain.model.CalendarItem) -> Unit = {},
+    onStreamingServiceClick: (String) -> Unit = {},
     onSaveFocusState: (Int, Int, Int, Int, Map<String, Int>) -> Unit
 ) {
 
     // Nested prefetch: when LazyColumn prefetches a row ahead of scrolling,
     // pre-compose up to 2 ContentCards in its nested LazyRow across multiple frames.
     // This spreads the composition work and prevents frame spikes when a new row scrolls in.
-    val nestedPrefetchStrategy = remember { LazyListPrefetchStrategy(nestedPrefetchItemCount = 2) }
+    val nestedPrefetchStrategy = remember { LazyListPrefetchStrategy(nestedPrefetchItemCount = 5) }
 
     val columnListState = rememberLazyListState(
         initialFirstVisibleItemIndex = focusState.verticalScrollIndex,
@@ -179,6 +183,24 @@ fun ClassicHomeContent(
                             ""
                         )
                     }
+                )
+            }
+        }
+
+        if (uiState.streamingServiceNames.isNotEmpty()) {
+            item(key = "streaming_services", contentType = "streaming_services") {
+                StreamingServicesRow(
+                    serviceNames = uiState.streamingServiceNames,
+                    onServiceClick = onStreamingServiceClick
+                )
+            }
+        }
+
+        if (uiState.newReleases.isNotEmpty()) {
+            item(key = "new_releases", contentType = "new_releases") {
+                NewReleasesSection(
+                    items = uiState.newReleases,
+                    onItemClick = onNewReleaseClick
                 )
             }
         }

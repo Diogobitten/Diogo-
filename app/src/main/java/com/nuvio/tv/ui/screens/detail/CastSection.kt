@@ -244,7 +244,10 @@ private fun CastMemberItem(
             ImageRequest.Builder(context)
                 .data(url)
                 .crossfade(false)
+                .allowHardware(true)
                 .size(width = cardSizePx, height = cardSizePx)
+                .memoryCacheKey("${url}_${cardSizePx}x${cardSizePx}")
+                .diskCacheKey("${url}_${cardSizePx}x${cardSizePx}")
                 .build()
         }
     }
