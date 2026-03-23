@@ -12,6 +12,8 @@
     Ecossistema Stremio • Otimizado para Android TV • Experiência focada em playback
   </p>
 
+  > ⚠️ Este é um fork pessoal do [NuvioTV](https://github.com/tapframe/NuvioTV) para uso próprio. Não aceita contribuições externas.
+
 </div>
 
 ## Sobre
