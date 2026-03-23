@@ -212,6 +212,11 @@ com/nuvio/tv/
 - `HomeUiState.streamingServiceNames: List<String>` holds the service names; `streamingServiceAddonName` holds the matched addon name
 - `StreamingServicesRow` composable renders a `LazyRow` of `StreamingServiceCard`s with dark background (`#2A2A2E`), rounded corners (12dp), and 1.08x scale on focus
 - Clicking a card: if the service has catalog rows of both movie and series types, a `StreamingTypePickerDialog` appears with "Movies" and "Series" buttons; if only one type exists, navigates directly to the "See All" screen
+- Brand intro video on focus: when a card is focused for 2 seconds, a muted looping intro video (`res/raw/intro_*.mp4`) plays inside the card with a 500ms fade-in overlay; video stops and logo returns when focus leaves
+- Intro videos mapped via `SERVICE_INTRO_VIDEOS` (`serviceName → R.raw.intro_*`); services without a video file show only the static logo
+- Available intro videos: Netflix, Disney+, HBO Max, Paramount+, MUBI, Crunchyroll, Prime Video, Apple TV+, Globoplay
+- `StreamingIntroPlayer` composable: minimal ExoPlayer instance, muted (`volume = 0f`), `REPEAT_MODE_ALL`, `VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING`, released on disposal
+- `PlayerView` with `useController = false` and `RESIZE_MODE_ZOOM` to fill the card area
 - `StreamingTypePickerDialog` uses `NuvioDialog` with `type_movie` and `type_series` string resources
 - Appears in all three home layouts before "Novidades" and "Continuar Assistindo": Classic (LazyColumn item), Grid (full-span grid item), Modern (separate LazyColumn item before carousel rows)
 - Row order in all layouts: Streaming Services → New Releases → Continue Watching → catalog rows
