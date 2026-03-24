@@ -206,14 +206,25 @@ fun GridHomeContent(
             label = "gridDominantColorAnim"
         )
 
-        // Fundo radial completo - simplified gradient for performance (fewer color stops = less GPU work)
+        // Fundo radial completo - gradient with reinforced color intensity
         val gradientBrush = remember(animatedDominantColor) {
             Brush.radialGradient(
                 colorStops = arrayOf(
-                    0.00f to animatedDominantColor.copy(alpha = 0.50f),
-                    0.20f to animatedDominantColor.copy(alpha = 0.30f),
-                    0.45f to animatedDominantColor.copy(alpha = 0.10f),
-                    0.70f to animatedDominantColor.copy(alpha = 0.02f),
+                    0.00f to animatedDominantColor.copy(alpha = 0.65f),
+                    0.05f to animatedDominantColor.copy(alpha = 0.60f),
+                    0.10f to animatedDominantColor.copy(alpha = 0.54f),
+                    0.15f to animatedDominantColor.copy(alpha = 0.48f),
+                    0.20f to animatedDominantColor.copy(alpha = 0.42f),
+                    0.25f to animatedDominantColor.copy(alpha = 0.36f),
+                    0.30f to animatedDominantColor.copy(alpha = 0.30f),
+                    0.35f to animatedDominantColor.copy(alpha = 0.25f),
+                    0.40f to animatedDominantColor.copy(alpha = 0.20f),
+                    0.45f to animatedDominantColor.copy(alpha = 0.16f),
+                    0.50f to animatedDominantColor.copy(alpha = 0.12f),
+                    0.55f to animatedDominantColor.copy(alpha = 0.09f),
+                    0.60f to animatedDominantColor.copy(alpha = 0.06f),
+                    0.70f to animatedDominantColor.copy(alpha = 0.04f),
+                    0.80f to animatedDominantColor.copy(alpha = 0.02f),
                     1.00f to Color.Transparent
                 ),
                 center = Offset(0f, 0f),
