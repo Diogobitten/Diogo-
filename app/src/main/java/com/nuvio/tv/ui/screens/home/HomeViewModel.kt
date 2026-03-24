@@ -183,15 +183,25 @@ class HomeViewModel @Inject constructor(
         observeTmdbSettings()
         observeStartupAuthNotice()
         loadContinueWatching()
-        loadNewReleases()
-        loadDailyTips()
-        loadAiRecommendations()
-        loadTmdbDiscovery()
-        loadTraktDiscovery()
+        // Catalogs are the critical path — load them first, everything else deferred
         observeInstalledAddons()
+        // Stagger secondary data loads so they don't compete with catalog network calls
         viewModelScope.launch {
             delay(1500)
             startupGracePeriodActive = false
+        }
+        viewModelScope.launch {
+            // Wait until first catalogs have arrived before loading secondary content
+            delay(2000)
+            loadNewReleases()
+            loadDailyTips()
+            loadTmdbDiscovery()
+            loadTraktDiscovery()
+        }
+        viewModelScope.launch {
+            // AI recommendations are the least critical — load last
+            delay(4000)
+            loadAiRecommendations()
         }
     }
 
@@ -299,7 +309,6 @@ class HomeViewModel @Inject constructor(
 
     private fun loadDailyTips() {
         viewModelScope.launch {
-            delay(500)
             try {
                 val tips = dailyTipService.getDailyTips()
                 if (tips.isNotEmpty()) {
@@ -314,7 +323,6 @@ class HomeViewModel @Inject constructor(
 
     private fun loadAiRecommendations() {
         viewModelScope.launch {
-            delay(1500) // Wait for library to load
             try {
                 _uiState.update { it.copy(aiRecommendationsLoading = true) }
                 val row = aiRecommendationService.getAiRecommendationRow()
@@ -343,7 +351,6 @@ class HomeViewModel @Inject constructor(
 
     private fun loadTmdbDiscovery() {
         viewModelScope.launch {
-            delay(500)
             try {
                 val row = tmdbDiscoveryService.getRecentlyReleasedRow()
                 if (row != null) {
@@ -391,7 +398,7 @@ class HomeViewModel @Inject constructor(
                         return@collectLatest
                     }
 
-                    delay(800)
+                    delay(200)
 
                     try {
                         val rows = traktDiscoveryService.getDiscoveryRows()

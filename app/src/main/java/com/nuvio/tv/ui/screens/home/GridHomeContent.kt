@@ -206,34 +206,24 @@ fun GridHomeContent(
             label = "gridDominantColorAnim"
         )
 
-        // Fundo radial completo - corrigido para não cortar à direita
+        // Fundo radial completo - simplified gradient for performance (fewer color stops = less GPU work)
+        val gradientBrush = remember(animatedDominantColor) {
+            Brush.radialGradient(
+                colorStops = arrayOf(
+                    0.00f to animatedDominantColor.copy(alpha = 0.50f),
+                    0.20f to animatedDominantColor.copy(alpha = 0.30f),
+                    0.45f to animatedDominantColor.copy(alpha = 0.10f),
+                    0.70f to animatedDominantColor.copy(alpha = 0.02f),
+                    1.00f to Color.Transparent
+                ),
+                center = Offset(0f, 0f),
+                radius = 2400f
+            )
+        }
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(
-                    Brush.radialGradient(
-                        colorStops = arrayOf(
-                            0.00f to animatedDominantColor.copy(alpha = 0.50f),
-                            0.05f to animatedDominantColor.copy(alpha = 0.46f),
-                            0.10f to animatedDominantColor.copy(alpha = 0.42f),
-                            0.15f to animatedDominantColor.copy(alpha = 0.37f),
-                            0.20f to animatedDominantColor.copy(alpha = 0.32f),
-                            0.25f to animatedDominantColor.copy(alpha = 0.27f),
-                            0.30f to animatedDominantColor.copy(alpha = 0.23f),
-                            0.35f to animatedDominantColor.copy(alpha = 0.19f),
-                            0.40f to animatedDominantColor.copy(alpha = 0.15f),
-                            0.45f to animatedDominantColor.copy(alpha = 0.12f),
-                            0.50f to animatedDominantColor.copy(alpha = 0.09f),
-                            0.55f to animatedDominantColor.copy(alpha = 0.07f),
-                            0.60f to animatedDominantColor.copy(alpha = 0.05f),
-                            0.70f to animatedDominantColor.copy(alpha = 0.03f),
-                            0.80f to animatedDominantColor.copy(alpha = 0.01f),
-                            1.00f to Color.Transparent
-                        ),
-                        center = Offset(0f, 0f),
-                        radius = 2400f
-                    )
-                )
+                .background(gradientBrush)
         )
 
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
