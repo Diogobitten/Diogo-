@@ -66,6 +66,7 @@ com/nuvio/tv/
 │   │   ├── profile/             # Profile selection/management
 │   │   ├── account/             # Account / auth screens
 │   │   ├── cast/                # Cast/crew detail screen
+│   │   ├── tmdb/                # TMDB entity browse screen (production company / network)
 │   │   └── diobot/              # Diobot AI Concierge screen
 │   ├── theme/                   # Color, Theme, Typography definitions
 │   └── util/                    # UI utilities (blur, language, formatting)
@@ -389,3 +390,24 @@ com/nuvio/tv/
 - Each card shows: author avatar (28dp circle), author name, star rating (gold ★ x/10), date, and truncated review text (max 300 chars, 6 lines)
 - Section title: "Comentários" (localized in values, values-pt-rBR, values-pt-rPT)
 - Positioned in detail screen `LazyColumn` between cast/crew tabs and production companies
+
+## TMDB Entity Browse System
+- Clicking a production company or network card on the detail screen navigates to `Screen.TmdbEntityBrowse` — a dedicated browse screen for that entity
+- Route: `Screen.TmdbEntityBrowse` (`tmdb_entity_browse/{entityKind}/{entityId}/{entityName}?sourceType={sourceType}`)
+- `entityKind` distinguishes `COMPANY` vs `NETWORK` — determines which TMDB Discover API parameter to use (`with_companies` vs `with_networks`)
+- `CompanyLogosSection` accepts `onCompanyClick` callback; `MetaDetailsScreen` wires it to navigation, passing `TmdbEntityKind.COMPANY` for production companies and `TmdbEntityKind.NETWORK` for networks
+- `TmdbEntityBrowseViewModel` (Hilt ViewModel) reads `entityKind`, `entityId`, `entityName` from `SavedStateHandle`; loads data via `TmdbMetadataService.fetchEntityBrowse()`
+- `TmdbEntityBrowseUiState` sealed interface: `Loading`, `Error(message)`, `Success(data: TmdbEntityBrowseData)`
+- `TmdbEntityBrowseScreen` composable: header with company/network logo (white background, 120×48dp) + name + description, followed by horizontal rails
+- Data models in `TmdbMetadataService.kt`: `TmdbEntityKind`, `TmdbEntityMediaType` (MOVIE, TV), `TmdbEntityRailType` (POPULAR, TOP_RATED, RECENT), `TmdbEntityHeader`, `TmdbEntityRail`, `TmdbEntityBrowseData`, `TmdbEntityRailPageResult`
+- `fetchEntityBrowse()` fetches header + 6 rails (3 rail types × 2 media types) in parallel with `Semaphore(6)` concurrency; empty rails filtered out
+- `fetchEntityRailPage()` supports infinite scroll pagination — triggered when user scrolls near end of a rail (last 5 items threshold)
+- TMDB Discover API endpoints: `discover/movie` with `with_companies`, `discover/tv` with `with_companies` or `with_networks`
+- Sort strategies: `popularity.desc` (Popular), `vote_average.desc` with `vote_count.gte=50` (Top Rated), `release_date.desc`/`first_air_date.desc` with `release_date.lte=today` (Recent)
+- All items enriched with IMDB IDs via `enrichWithImdbIds()` — resolves `getMovieExternalIds`/`getTvExternalIds` with `Semaphore(6)` concurrency, same pattern as TraktDiscoveryService
+- Items use `GridContentCard` for rendering; navigation passes IMDB ID (preferred) or TMDB ID as fallback
+- Rail titles localized: "Filmes Populares", "Séries Populares", "Filmes Mais Bem Avaliados", "Séries Mais Bem Avaliadas", "Filmes Recentes", "Séries Recentes"
+- DTOs: `TmdbCompanyDetailsResponse`, `TmdbNetworkDetailsResponse` in `TmdbApi.kt`; `TmdbDiscoverResponse`/`TmdbDiscoverItem` expanded with `backdropPath`, `voteAverage`, `releaseDate`, `firstAirDate`, `mediaType`
+- `MetaCompany` domain model includes `tmdbId: Int?` field for navigation
+- Entity header and browse data cached in-memory (`ConcurrentHashMap`) per session
+- Files: `TmdbEntityBrowseScreen.kt`, `TmdbEntityBrowseViewModel.kt`, `TmdbEntityBrowseUiState.kt` in `ui/screens/tmdb/`

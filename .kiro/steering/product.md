@@ -31,6 +31,7 @@ NuvioTV is an Android TV media player that integrates with the Stremio addon eco
 - HD backdrop images — all TMDB backdrop/background images use `original` size (native resolution, typically 1920x1080+) instead of `w1280` for sharp display on TV screens
 - Zero-flash TMDB backdrop — detail screen pre-fetches TMDB enrichment in parallel with addon meta loading; hero carousel applies cached TMDB backdrop/logo synchronously before first render; Stremio addon images used only as fallback
 - TMDB Reviews on detail screen — user reviews fetched from TMDB API (`movie/{id}/reviews` and `tv/{id}/reviews`), displayed as horizontally scrollable cards with author avatar, rating, date, and truncated review text; cards are D-pad focusable with scale/border animation and 80% transparent background
+- TMDB Entity Browse — clicking a production company or network card on the detail screen navigates to a dedicated browse screen showing movies and TV shows by that entity, with horizontal rails (Popular, Top Rated, Recent) for both movies and TV, infinite scroll pagination, and IMDB ID enrichment for Stremio addon compatibility
 
 ## Target Platform
 - Android TV (API 24+, targeting API 36)
@@ -41,7 +42,7 @@ NuvioTV is an Android TV media player that integrates with the Stremio addon eco
 - Stremio addon protocol (content catalogs, metadata, streams, subtitles)
 - Supabase (auth, profiles, cloud sync)
 - Trakt.tv (scrobbling, library, watch history, personalized calendar)
-- TMDB (metadata, images, cast, release dates, season/episode air dates, user reviews)
+- TMDB (metadata, images, cast, release dates, season/episode air dates, user reviews, entity browse via Discover API)
 - DiceBear API (cartoon-style profile avatars — SVG, no API key required)
 - Akabab Superhero API (Marvel, DC, Star Wars character images — cdn.jsdelivr.net, no API key)
 - Rick and Morty API (character avatars — no API key required)
