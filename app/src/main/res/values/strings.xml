@@ -131,6 +131,18 @@
     <string name="detail_section_network">Network</string>
     <string name="detail_section_production">Production</string>
     <string name="detail_section_reviews">Comentários</string>
+
+    <!-- TMDB Entity Browse -->
+    <string name="tmdb_entity_kind_company">Production Company</string>
+    <string name="tmdb_entity_kind_network">Network</string>
+    <string name="tmdb_entity_rail_popular_movies">Popular Movies</string>
+    <string name="tmdb_entity_rail_popular_tv">Popular TV Shows</string>
+    <string name="tmdb_entity_rail_top_rated_movies">Top Rated Movies</string>
+    <string name="tmdb_entity_rail_top_rated_tv">Top Rated TV Shows</string>
+    <string name="tmdb_entity_rail_recent_movies">Recent Movies</string>
+    <string name="tmdb_entity_rail_recent_tv">Recent TV Shows</string>
+    <string name="tmdb_entity_empty_title">No content found</string>
+    <string name="tmdb_entity_empty_subtitle">This entity has no movies or TV shows available.</string>
     <string name="episodes_unavailable">Unavailable</string>
     <string name="series_status_ended">Ended</string>
     <string name="series_status_continuing">Ongoing</string>

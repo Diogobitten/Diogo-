@@ -42,7 +42,8 @@ import com.nuvio.tv.ui.theme.NuvioTheme
 @Composable
 fun CompanyLogosSection(
     title: String,
-    companies: List<MetaCompany>
+    companies: List<MetaCompany>,
+    onCompanyClick: (MetaCompany) -> Unit = {}
 ) {
     if (companies.isEmpty()) return
 
@@ -69,14 +70,20 @@ fun CompanyLogosSection(
                     "$title-$index-${company.name}-${company.logo.orEmpty()}"
                 }
             ) { _, company ->
-                CompanyLogoCard(company = company)
+                CompanyLogoCard(
+                    company = company,
+                    onClick = { onCompanyClick(company) }
+                )
             }
         }
     }
 }
 
 @Composable
-private fun CompanyLogoCard(company: MetaCompany) {
+private fun CompanyLogoCard(
+    company: MetaCompany,
+    onClick: () -> Unit
+) {
     val context = LocalContext.current
     val density = LocalDensity.current
     val logoWidthPx = remember(density) { with(density) { 140.dp.roundToPx() } }
@@ -96,7 +103,7 @@ private fun CompanyLogoCard(company: MetaCompany) {
     var logoLoadFailed by remember(company.logo) { mutableStateOf(false) }
 
     Card(
-        onClick = { },
+        onClick = onClick,
         modifier = Modifier
             .width(140.dp)
             .height(56.dp),

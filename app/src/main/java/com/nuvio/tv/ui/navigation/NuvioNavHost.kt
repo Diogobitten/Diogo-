@@ -45,6 +45,7 @@ import com.nuvio.tv.ui.screens.profile.ProfileSelectionMode
 import com.nuvio.tv.ui.screens.profile.ProfileSelectionScreen
 import com.nuvio.tv.ui.screens.calendar.CalendarScreen
 import com.nuvio.tv.ui.screens.diobot.DiobotScreen
+import com.nuvio.tv.ui.screens.tmdb.TmdbEntityBrowseScreen
 
 @Composable
 fun NuvioNavHost(
@@ -294,6 +295,9 @@ fun NuvioNavHost(
                 },
                 onNavigateToDetail = { itemId, itemType, addonBaseUrl ->
                     navController.navigate(Screen.Detail.createRoute(itemId, itemType, addonBaseUrl))
+                },
+                onNavigateToEntityBrowse = { entityKind, entityId, entityName ->
+                    navController.navigate(Screen.TmdbEntityBrowse.createRoute(entityKind, entityId, entityName))
                 },
                 onPlayClick = { videoId, contentType, contentId, title, poster, backdrop, logo, season, episode, episodeName, genres, year, runtime ->
                     navController.navigate(
@@ -1059,6 +1063,27 @@ fun NuvioNavHost(
             )
         ) {
             CastDetailScreen(
+                onBackPress = { navController.popBackStack() },
+                onNavigateToDetail = { itemId, itemType, addonBaseUrl ->
+                    navController.navigate(Screen.Detail.createRoute(itemId, itemType, addonBaseUrl))
+                }
+            )
+        }
+
+        composable(
+            route = Screen.TmdbEntityBrowse.route,
+            arguments = listOf(
+                navArgument("entityKind") { type = NavType.StringType },
+                navArgument("entityId") { type = NavType.StringType },
+                navArgument("entityName") { type = NavType.StringType },
+                navArgument("sourceType") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                }
+            )
+        ) {
+            TmdbEntityBrowseScreen(
                 onBackPress = { navController.popBackStack() },
                 onNavigateToDetail = { itemId, itemType, addonBaseUrl ->
                     navController.navigate(Screen.Detail.createRoute(itemId, itemType, addonBaseUrl))

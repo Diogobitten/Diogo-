@@ -118,6 +118,18 @@
     <string name="detail_section_network">Rede</string>
     <string name="detail_section_production">Produção</string>
     <string name="detail_section_reviews">Comentários</string>
+
+    <!-- TMDB Entity Browse -->
+    <string name="tmdb_entity_kind_company">Produtora</string>
+    <string name="tmdb_entity_kind_network">Rede</string>
+    <string name="tmdb_entity_rail_popular_movies">Filmes Populares</string>
+    <string name="tmdb_entity_rail_popular_tv">Séries Populares</string>
+    <string name="tmdb_entity_rail_top_rated_movies">Filmes Mais Bem Avaliados</string>
+    <string name="tmdb_entity_rail_top_rated_tv">Séries Mais Bem Avaliadas</string>
+    <string name="tmdb_entity_rail_recent_movies">Filmes Recentes</string>
+    <string name="tmdb_entity_rail_recent_tv">Séries Recentes</string>
+    <string name="tmdb_entity_empty_title">Nenhum conteúdo encontrado</string>
+    <string name="tmdb_entity_empty_subtitle">Esta entidade não possui filmes ou séries disponíveis.</string>
     <string name="episodes_unavailable">Indisponível</string>
     <string name="detail_lists_fallback">Listas</string>
     <string name="detail_lists_subtitle">Em quais listas este título deve aparecer?</string>

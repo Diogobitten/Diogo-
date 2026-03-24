@@ -195,6 +195,7 @@ fun MetaDetailsScreen(
     onBackPress: () -> Unit,
     onNavigateToCastDetail: (personId: Int, personName: String, preferCrew: Boolean) -> Unit = { _, _, _ -> },
     onNavigateToDetail: (itemId: String, itemType: String, addonBaseUrl: String?) -> Unit = { _, _, _ -> },
+    onNavigateToEntityBrowse: (entityKind: String, entityId: Int, entityName: String) -> Unit = { _, _, _ -> },
     onPlayClick: (
         videoId: String,
         contentType: String,
@@ -525,7 +526,8 @@ fun MetaDetailsScreen(
                     onTrailerButtonClick = { viewModel.onEvent(MetaDetailsEvent.OnTrailerButtonClick) },
                     restorePlayFocusAfterTrailerBackToken = restorePlayFocusAfterTrailerBackToken,
                     onNavigateToCastDetail = onNavigateToCastDetail,
-                    onNavigateToDetail = onNavigateToDetail
+                    onNavigateToDetail = onNavigateToDetail,
+                    onNavigateToEntityBrowse = onNavigateToEntityBrowse
                 )
             }
         }
@@ -653,7 +655,8 @@ private fun MetaDetailsContent(
     onTrailerButtonClick: () -> Unit,
     restorePlayFocusAfterTrailerBackToken: Int,
     onNavigateToCastDetail: (personId: Int, personName: String, preferCrew: Boolean) -> Unit = { _, _, _ -> },
-    onNavigateToDetail: (itemId: String, itemType: String, addonBaseUrl: String?) -> Unit = { _, _, _ -> }
+    onNavigateToDetail: (itemId: String, itemType: String, addonBaseUrl: String?) -> Unit = { _, _, _ -> },
+    onNavigateToEntityBrowse: (entityKind: String, entityId: Int, entityName: String) -> Unit = { _, _, _ -> }
 ) {
     val isSeries = remember(meta.type, meta.videos) {
         meta.type == ContentType.SERIES || meta.videos.isNotEmpty()
@@ -1392,7 +1395,11 @@ private fun MetaDetailsContent(
                     item(key = "networks", contentType = "horizontal_row") {
                         CompanyLogosSection(
                             title = stringResource(R.string.detail_section_network),
-                            companies = meta.networks
+                            companies = meta.networks,
+                            onCompanyClick = { company ->
+                                val tmdbId = company.tmdbId ?: return@CompanyLogosSection
+                                onNavigateToEntityBrowse("NETWORK", tmdbId, company.name)
+                            }
                         )
                     }
                 }
@@ -1401,7 +1408,11 @@ private fun MetaDetailsContent(
                     item(key = "production", contentType = "horizontal_row") {
                         CompanyLogosSection(
                             title = stringResource(R.string.detail_section_production),
-                            companies = meta.productionCompanies
+                            companies = meta.productionCompanies,
+                            onCompanyClick = { company ->
+                                val tmdbId = company.tmdbId ?: return@CompanyLogosSection
+                                onNavigateToEntityBrowse("COMPANY", tmdbId, company.name)
+                            }
                         )
                     }
                 }
@@ -1410,7 +1421,11 @@ private fun MetaDetailsContent(
                     item(key = "production", contentType = "horizontal_row") {
                         CompanyLogosSection(
                             title = stringResource(R.string.detail_section_production),
-                            companies = meta.productionCompanies
+                            companies = meta.productionCompanies,
+                            onCompanyClick = { company ->
+                                val tmdbId = company.tmdbId ?: return@CompanyLogosSection
+                                onNavigateToEntityBrowse("COMPANY", tmdbId, company.name)
+                            }
                         )
                     }
                 }
@@ -1419,7 +1434,11 @@ private fun MetaDetailsContent(
                     item(key = "networks", contentType = "horizontal_row") {
                         CompanyLogosSection(
                             title = stringResource(R.string.detail_section_network),
-                            companies = meta.networks
+                            companies = meta.networks,
+                            onCompanyClick = { company ->
+                                val tmdbId = company.tmdbId ?: return@CompanyLogosSection
+                                onNavigateToEntityBrowse("NETWORK", tmdbId, company.name)
+                            }
                         )
                     }
                 }
