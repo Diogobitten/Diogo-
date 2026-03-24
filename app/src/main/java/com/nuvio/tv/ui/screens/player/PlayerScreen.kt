@@ -12,6 +12,11 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -78,6 +83,8 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -99,6 +106,7 @@ import androidx.tv.material3.IconButtonDefaults
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import coil.compose.rememberAsyncImagePainter
+import coil.compose.AsyncImage
 import coil.decode.SvgDecoder
 import coil.request.ImageRequest
 import androidx.compose.ui.res.stringResource
@@ -591,13 +599,62 @@ fun PlayerScreen(
                 .zIndex(2.6f)
         )
 
-        // Buffering indicator
+        // Buffering indicator — show movie/series logo instead of generic spinner
         if (uiState.isBuffering && !uiState.showLoadingOverlay) {
+            val bufferLogoUrl = uiState.logo
+            val bufferTitle = uiState.title
+            var bufferLogoFailed by remember(bufferLogoUrl) { mutableStateOf(false) }
+            val showBufferLogo = !bufferLogoUrl.isNullOrBlank() && !bufferLogoFailed
+
+            val bufferInfiniteTransition = rememberInfiniteTransition(label = "bufferLogoPulse")
+            val bufferLogoScale by bufferInfiniteTransition.animateFloat(
+                initialValue = 1f,
+                targetValue = 1.04f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(durationMillis = 2000, easing = LinearEasing),
+                    repeatMode = RepeatMode.Reverse
+                ),
+                label = "bufferLogoScale"
+            )
+
             Box(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
-                LoadingIndicator()
+                if (showBufferLogo) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(bufferLogoUrl)
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = "Buffering",
+                        onError = { bufferLogoFailed = true },
+                        modifier = Modifier
+                            .width(280.dp)
+                            .height(160.dp)
+                            .graphicsLayer {
+                                scaleX = bufferLogoScale
+                                scaleY = bufferLogoScale
+                            },
+                        contentScale = ContentScale.Fit
+                    )
+                } else if (!bufferTitle.isNullOrBlank()) {
+                    Text(
+                        text = bufferTitle,
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = Color.White.copy(alpha = 0.9f),
+                        textAlign = TextAlign.Center,
+                        maxLines = 2,
+                        modifier = Modifier
+                            .padding(horizontal = 24.dp)
+                            .graphicsLayer {
+                                scaleX = bufferLogoScale
+                                scaleY = bufferLogoScale
+                            }
+                    )
+                } else {
+                    LoadingIndicator()
+                }
             }
         }
 

@@ -135,13 +135,13 @@ data class SubtitleStyleSettings(
  * Data class representing buffer settings
  */
 data class BufferSettings(
-    val minBufferMs: Int = 50_000,
-    val maxBufferMs: Int = 50_000,
-    val bufferForPlaybackMs: Int = 2_500,
-    val bufferForPlaybackAfterRebufferMs: Int = 5_000,
-    val targetBufferSizeMb: Int = 0, // 0 = ExoPlayer default
-    val backBufferDurationMs: Int = 0,
-    val retainBackBufferFromKeyframe: Boolean = false
+    val minBufferMs: Int = 80_000,
+    val maxBufferMs: Int = 120_000,
+    val bufferForPlaybackMs: Int = 5_000,
+    val bufferForPlaybackAfterRebufferMs: Int = 15_000,
+    val targetBufferSizeMb: Int = 0, // 0 = no byte limit, duration-only buffering
+    val backBufferDurationMs: Int = 60_000,
+    val retainBackBufferFromKeyframe: Boolean = true
 )
 
 /**
@@ -330,6 +330,8 @@ class PlayerSettingsDataStore @Inject constructor(
     private val retainBackBufferFromKeyframeKey = booleanPreferencesKey("retain_back_buffer_from_keyframe")
 
     private val migrationLoadControlDefaultsAlignedDoneKey = booleanPreferencesKey("migration_load_control_defaults_aligned_done")
+    private val migrationBufferV2DoneKey = booleanPreferencesKey("migration_buffer_v2_done")
+    private val migrationBufferV3DoneKey = booleanPreferencesKey("migration_buffer_v3_done")
 
     init {
         ioScope.launch {
@@ -348,6 +350,51 @@ class PlayerSettingsDataStore @Inject constructor(
                     }
 
                     prefs[migrationLoadControlDefaultsAlignedDoneKey] = true
+                }
+
+                // V2 buffer migration: upgrade old defaults to aggressive TV-optimized values
+                val bufferV2Migrated = prefs[migrationBufferV2DoneKey] ?: false
+                if (!bufferV2Migrated) {
+                    val curMin = prefs[minBufferMsKey]
+                    val curMax = prefs[maxBufferMsKey]
+                    val curAfterRebuffer = prefs[bufferForPlaybackAfterRebufferMsKey]
+                    val curTargetMb = prefs[targetBufferSizeMbKey]
+                    val curBackBuffer = prefs[backBufferDurationMsKey]
+                    val curRetainKeyframe = prefs[retainBackBufferFromKeyframeKey]
+
+                    // Only migrate if user hasn't customized (still on old defaults)
+                    val onOldDefaults = (curMin == null || curMin == 50_000) &&
+                        (curMax == null || curMax == 50_000 || curMax == 120_000) &&
+                        (curAfterRebuffer == null || curAfterRebuffer == 5_000 || curAfterRebuffer == 10_000) &&
+                        (curTargetMb == null || curTargetMb == 0 || curTargetMb == 150) &&
+                        (curBackBuffer == null || curBackBuffer == 0 || curBackBuffer == 30_000) &&
+                        (curRetainKeyframe == null || curRetainKeyframe == false || curRetainKeyframe == true)
+
+                    if (onOldDefaults) {
+                        prefs[minBufferMsKey] = 80_000
+                        prefs[maxBufferMsKey] = 120_000
+                        prefs[bufferForPlaybackMsKey] = 5_000
+                        prefs[bufferForPlaybackAfterRebufferMsKey] = 15_000
+                        prefs[targetBufferSizeMbKey] = 0
+                        prefs[backBufferDurationMsKey] = 60_000
+                        prefs[retainBackBufferFromKeyframeKey] = true
+                    }
+
+                    prefs[migrationBufferV2DoneKey] = true
+                }
+
+                // V3 buffer migration: force optimal values for users who ran V2 with intermediate defaults
+                // V2 may have applied values that were later found insufficient for 4K Real Debrid streams
+                val bufferV3Migrated = prefs[migrationBufferV3DoneKey] ?: false
+                if (!bufferV3Migrated) {
+                    prefs[minBufferMsKey] = 80_000
+                    prefs[maxBufferMsKey] = 120_000
+                    prefs[bufferForPlaybackMsKey] = 5_000
+                    prefs[bufferForPlaybackAfterRebufferMsKey] = 15_000
+                    prefs[targetBufferSizeMbKey] = 0
+                    prefs[backBufferDurationMsKey] = 60_000
+                    prefs[retainBackBufferFromKeyframeKey] = true
+                    prefs[migrationBufferV3DoneKey] = true
                 }
 
                 val min = prefs[minBufferMsKey]
@@ -489,13 +536,13 @@ class PlayerSettingsDataStore @Inject constructor(
                     outlineWidth = prefs[subtitleOutlineWidthKey] ?: 2
                 ),
                 bufferSettings = BufferSettings(
-                    minBufferMs = prefs[minBufferMsKey] ?: 50_000,
-                    maxBufferMs = prefs[maxBufferMsKey] ?: 50_000,
-                    bufferForPlaybackMs = prefs[bufferForPlaybackMsKey] ?: 2_500,
-                    bufferForPlaybackAfterRebufferMs = prefs[bufferForPlaybackAfterRebufferMsKey] ?: 5_000,
+                    minBufferMs = prefs[minBufferMsKey] ?: 80_000,
+                    maxBufferMs = prefs[maxBufferMsKey] ?: 120_000,
+                    bufferForPlaybackMs = prefs[bufferForPlaybackMsKey] ?: 5_000,
+                    bufferForPlaybackAfterRebufferMs = prefs[bufferForPlaybackAfterRebufferMsKey] ?: 15_000,
                     targetBufferSizeMb = prefs[targetBufferSizeMbKey] ?: 0,
-                    backBufferDurationMs = prefs[backBufferDurationMsKey] ?: 0,
-                    retainBackBufferFromKeyframe = prefs[retainBackBufferFromKeyframeKey] ?: false
+                    backBufferDurationMs = prefs[backBufferDurationMsKey] ?: 60_000,
+                    retainBackBufferFromKeyframe = prefs[retainBackBufferFromKeyframeKey] ?: true
                 )
             )
         }
@@ -880,9 +927,9 @@ class PlayerSettingsDataStore @Inject constructor(
 
     suspend fun setBufferMinBufferMs(ms: Int) {
         store().edit { prefs ->
-            val newMin = ms.coerceIn(5_000, 120_000)
+            val newMin = ms.coerceIn(5_000, 300_000)
             prefs[minBufferMsKey] = newMin
-            val currentMax = prefs[maxBufferMsKey] ?: 50_000
+            val currentMax = prefs[maxBufferMsKey] ?: 120_000
             if (currentMax < newMin) {
                 prefs[maxBufferMsKey] = newMin
             }
@@ -891,8 +938,8 @@ class PlayerSettingsDataStore @Inject constructor(
 
     suspend fun setBufferMaxBufferMs(ms: Int) {
         store().edit { prefs ->
-            val currentMin = prefs[minBufferMsKey] ?: 50_000
-            prefs[maxBufferMsKey] = ms.coerceIn(currentMin, 120_000)
+            val currentMin = prefs[minBufferMsKey] ?: 80_000
+            prefs[maxBufferMsKey] = ms.coerceIn(currentMin, 600_000)
         }
     }
 
@@ -916,7 +963,7 @@ class PlayerSettingsDataStore @Inject constructor(
 
     suspend fun setBufferBackBufferDurationMs(ms: Int) {
         store().edit { prefs ->
-            prefs[backBufferDurationMsKey] = ms.coerceIn(0, 120_000)
+            prefs[backBufferDurationMsKey] = ms.coerceIn(0, 300_000)
         }
     }
 

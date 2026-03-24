@@ -111,7 +111,14 @@
 - `MetaDetailsViewModel.applyMetaWithEnrichment()` launches `loadMoreLikeThisAsync`, `loadMDBListRatings`, `loadReviewsAsync`, and `enrichMeta` all in parallel — MDBList ratings and TMDB reviews no longer wait for enrichment to complete
 - Zero-flash TMDB backdrop: detail screen pre-fetches TMDB enrichment in parallel with addon meta via `prefetchTmdbEnrichment()` + `Deferred`; hero carousel applies `getCachedEnrichment()` synchronously before first render — TMDB is the default backdrop source, addon is fallback only
 - `TmdbService.getCachedTmdbId()` provides synchronous cache-only TMDB ID resolution without network calls
-- Home screen startup delays reduced: `loadNewReleases` 800ms, `loadDailyTips` 500ms, `loadAiRecommendations` 1500ms, `loadTmdbDiscovery` 500ms, `loadTraktDiscovery` 800ms, `startupGracePeriod` 1500ms
+- Home screen startup: `loadNewReleases` waits for library to load (up to 5s timeout + 300ms settle), `loadDailyTips` 500ms, `loadAiRecommendations` 1500ms, `loadTmdbDiscovery` 500ms, `loadTraktDiscovery` 800ms, `startupGracePeriod` 1500ms
+- ExoPlayer LoadControl (aligned with upstream NuvioTV): `targetBufferBytes` 100MB, `maxBuffer` 70s, `minBuffer`/`bufferForPlayback`/`bufferForPlaybackAfterRebuffer` use ExoPlayer defaults (50s/2.5s/5s) — buffer duration settings in `PlayerSettingsDataStore` are retained for future UI but LoadControl now uses hardcoded upstream values
+- No CacheDataSource — stream data goes directly from OkHttp to ExoPlayer without disk cache intermediary; previous 500MB SimpleCache caused periodic buffering on 4K streams due to slow TV internal storage I/O bottleneck
+- Player OkHttpClient: auto-negotiates HTTP/1.1 or HTTP/2 (no forced protocol), `connectTimeout` 15s, `readTimeout` 30s, `retryOnConnectionFailure` true, `IPv4FirstDns`
+- `FormatAwareAudioTrackBufferProvider`: per-codec AudioTrack buffer sizing to prevent micro-stuttering on lossless codecs (DTS-HD MA 122KB, TrueHD 122KB, DTS Core 43KB, AC3 scaled, EAC3 21KB, PCM ~200ms target)
+- Buffer migration system: V1 (legacy→50s), V2 (50s→80s/240s), V3 (force-apply optimal values) — migrations in `PlayerSettingsDataStore.init` (retained but LoadControl uses upstream defaults)
+- Mid-playback buffering indicator shows movie/series logo (pulse animation) instead of generic spinner, falling back to title text, then to default spinner
+- Stuck recovery: auto-recovery from "Player stuck playing with no progress for 10000ms" error (code 1003), up to 3 retry attempts — stops player, clears media, re-creates source at current position, re-prepares
 - Both `ClassicHomeContent` and `ModernHomeContent` use `LazyListPrefetchStrategy(nestedPrefetchItemCount = 5)` on their vertical `LazyColumn` to pre-compose cards in nested `LazyRow`s across multiple frames before rows scroll into view
 - D-pad key repeat throttling (120ms in Grid, 80ms in Classic and Modern) to prevent HWUI overload when holding a direction key
 - `ModernHomeContent` uses extensive row/item build caching (`ModernCarouselRowBuildCache`) to avoid recomposing unchanged catalog rows

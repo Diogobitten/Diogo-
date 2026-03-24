@@ -340,6 +340,7 @@ internal fun PlayerRuntimeController.switchToSourceStream(stream: Stream) {
     )
     persistSelectedStreamForReuse(stream = stream, url = url, headers = newHeaders)
     hasRetriedCurrentStreamAfter416 = false
+    stuckRecoveryAttempts = 0
     lastSavedPosition = 0L
 
     _uiState.update {
@@ -615,6 +616,7 @@ internal fun PlayerRuntimeController.switchToEpisodeStream(stream: Stream, force
         }
     }
     hasRetriedCurrentStreamAfter416 = false
+    stuckRecoveryAttempts = 0
     currentVideoId = targetVideo?.id ?: _uiState.value.episodeStreamsForVideoId ?: currentVideoId
     currentSeason = targetVideo?.season ?: _uiState.value.episodeStreamsSeason ?: currentSeason
     currentEpisode = targetVideo?.episode ?: _uiState.value.episodeStreamsEpisode ?: currentEpisode

@@ -45,6 +45,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.Collections
 import javax.inject.Inject
 
@@ -267,8 +268,19 @@ class HomeViewModel @Inject constructor(
 
     private fun loadNewReleases() {
         viewModelScope.launch {
-            // Give library time to load before fetching calendar data
-            delay(800)
+            // Wait for library to actually have items before fetching calendar data.
+            // Use a reactive approach: observe libraryItems and re-fetch when library changes.
+            // Timeout after 5s if library never loads (e.g. empty library).
+            val hasLibrary = kotlinx.coroutines.withTimeoutOrNull(5000L) {
+                libraryRepository.libraryItems.first { it.isNotEmpty() }
+            }
+            if (hasLibrary == null) {
+                android.util.Log.d(TAG, "New releases: library empty after timeout, skipping")
+                return@launch
+            }
+
+            // Small settle delay to let any remaining library sync finish
+            delay(300)
 
             try {
                 val items = calendarRepository.getCalendarItems(days = 14, pastDays = 7)

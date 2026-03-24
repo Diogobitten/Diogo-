@@ -195,7 +195,7 @@ com/nuvio/tv/
 - Horizontal row on Home screen showing library items that released new content today
 - Appears below the hero/featured section, before continue watching and catalog rows
 - Data sourced from `CalendarRepository.getCalendarItems(days = 14, pastDays = 7)`, filtered to `date == today` in `HomeViewModel.loadNewReleases()`
-- `HomeViewModel` delays 2s after init for library to load before fetching calendar data
+- `HomeViewModel.loadNewReleases()` waits reactively for `libraryRepository.libraryItems` to emit a non-empty list (up to 5s timeout), then adds a 300ms settle delay before fetching calendar data — ensures library is loaded regardless of sync speed
 - `NewReleasesSection` composable renders a `LazyRow` of landscape cards (220×124dp) using backdrop images with `fillMaxWidth().height()` to ensure full card coverage
 - Cards have colored badge overlays: green (`#66BB6A`) for "Nova temporada" (episode 1), blue (`#4FC3F7`) for "Novo episódio" (other episodes), orange (`#FFA726`) for movies ("Novidade")
 - Episode cards show S1E2 label at bottom-right
@@ -365,6 +365,16 @@ com/nuvio/tv/
 - Applied across: `TmdbMetadataService` (recommendations, collection parts, cast credits), `TraktDiscoveryService`, `AiRecommendationService`, `DailyTipService`, `TmdbDiscoveryService`
 - Poster images remain at `w500` (sufficient for card thumbnails)
 - Calendar items use smaller sizes (`w500` for episode stills, `w780` for calendar card backdrops) as they display in compact UI
+
+## Player Buffer & Networking Configuration
+- `PlayerRuntimeControllerInitialization.kt` builds `DefaultLoadControl` aligned with upstream NuvioTV: `targetBufferBytes` 100MB, `maxBuffer` 70s, `minBuffer`/`bufferForPlayback`/`bufferForPlaybackAfterRebuffer` use ExoPlayer defaults (50s/2.5s/5s)
+- No CacheDataSource — `PlayerMediaSourceFactory.kt` feeds OkHttp data directly to ExoPlayer without disk cache intermediary; previous 500MB SimpleCache caused periodic buffering on 4K streams due to slow TV internal storage I/O bottleneck (every byte went Network → Disk write → Disk read → ExoPlayer)
+- `PlayerMediaSourceFactory.kt` playback OkHttpClient: auto-negotiates HTTP/1.1 or HTTP/2 (no forced protocol), `connectTimeout` 15s, `readTimeout` 30s, `retryOnConnectionFailure` true, `IPv4FirstDns`, follows redirects
+- `FormatAwareAudioTrackBufferProvider.kt`: per-codec AudioTrack buffer sizing to prevent micro-stuttering on lossless codecs — DTS-HD MA 122KB (4×30720), TrueHD 122KB (2×61440), DTS Core 43KB (8×5462), AC3 scaled (max of platform×3 or 1536×8), EAC3 21KB (2×10752), PCM ~200ms target; integrated into `SubtitleOffsetRenderersFactory.buildAudioSink()`
+- `BufferSettings` data class in `PlayerSettingsDataStore.kt` retained for future settings UI but LoadControl now uses hardcoded upstream values
+- Buffer migration system in `PlayerSettingsDataStore.init`: V1 (legacy→50s), V2 (50s→80s), V3 (force-apply) — retained for DataStore consistency
+- Stuck recovery: auto-recovery from "Player stuck playing with no progress for 10000ms" error (code 1003), up to 3 retry attempts — stops player, clears media, re-creates source at current position, re-prepares; counter resets on STATE_READY and stream switch
+- Mid-playback buffering indicator (`PlayerScreen.kt`): shows movie/series logo with pulse animation instead of generic spinner, falls back to title text, then to default `LoadingIndicator()`
 
 ## TMDB Reviews System
 - `TmdbMetadataService.fetchReviews()` fetches user reviews from TMDB API for both movies (`movie/{id}/reviews`) and TV shows (`tv/{id}/reviews`)

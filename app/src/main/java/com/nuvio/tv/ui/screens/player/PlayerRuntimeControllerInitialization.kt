@@ -277,6 +277,7 @@ internal fun PlayerRuntimeController.initializePlayer(url: String, headers: Map<
                     
                         
                         if (playbackState == Player.STATE_READY) {
+                            stuckRecoveryAttempts = 0
                             if (shouldEnforceAutoplayOnFirstReady) {
                                 shouldEnforceAutoplayOnFirstReady = false
                                 if (!userPausedManually && !isPlaying) {
@@ -355,6 +356,47 @@ internal fun PlayerRuntimeController.initializePlayer(url: String, headers: Map<
                             (error.cause as? androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException)?.responseCode
                         if (responseCode == 416 && !hasRetriedCurrentStreamAfter416) {
                             retryCurrentStreamFromStartAfter416()
+                            return
+                        }
+                        // Auto-recover from "stuck buffering" errors by re-preparing
+                        // at the current position instead of showing a fatal error.
+                        // ExoPlayer error 1003 fires when playback makes no progress
+                        // for 10s — common with high-bitrate 4K streams on slow refill.
+                        if (error.errorCode == PlaybackException.ERROR_CODE_IO_UNSPECIFIED
+                            && error.message?.contains("stuck", ignoreCase = true) == true
+                            && stuckRecoveryAttempts < 3
+                        ) {
+                            stuckRecoveryAttempts++
+                            val resumePos = this@apply.currentPosition
+                            _uiState.update {
+                                it.copy(
+                                    error = null,
+                                    isBuffering = true,
+                                    showLoadingOverlay = it.loadingOverlayEnabled
+                                )
+                            }
+                            runCatching {
+                                this@apply.stop()
+                                this@apply.clearMediaItems()
+                                this@apply.setMediaSource(
+                                    mediaSourceFactory.createMediaSource(
+                                        url = currentStreamUrl,
+                                        headers = currentHeaders,
+                                        mimeTypeOverride = currentStreamMimeType
+                                    )
+                                )
+                                this@apply.seekTo(resumePos)
+                                this@apply.playWhenReady = true
+                                this@apply.prepare()
+                            }.onFailure { e ->
+                                _uiState.update {
+                                    it.copy(
+                                        error = e.message ?: "Playback error",
+                                        showLoadingOverlay = false,
+                                        showPauseOverlay = false
+                                    )
+                                }
+                            }
                             return
                         }
                         _uiState.update {
@@ -574,6 +616,7 @@ private class SubtitleOffsetRenderersFactory(
             .setEnableFloatOutput(enableFloatOutput)
             .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
             .setAudioProcessors(arrayOf(gainAudioProcessor))
+            .setAudioTrackBufferSizeProvider(FormatAwareAudioTrackBufferProvider())
             .build()
     }
 
