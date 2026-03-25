@@ -153,10 +153,14 @@ interface TmdbApi {
         @Query("api_key") apiKey: String,
         @Query("with_genres") withGenres: String? = null,
         @Query("with_companies") withCompanies: String? = null,
+        @Query("with_keywords") withKeywords: String? = null,
         @Query("sort_by") sortBy: String = "popularity.desc",
         @Query("language") language: String = "en-US",
         @Query("page") page: Int = 1,
         @Query("release_date.lte") releaseDateLte: String? = null,
+        @Query("release_date.gte") releaseDateGte: String? = null,
+        @Query("primary_release_date.gte") primaryReleaseDateGte: String? = null,
+        @Query("primary_release_date.lte") primaryReleaseDateLte: String? = null,
         @Query("vote_count.gte") voteCountGte: Int? = null
     ): Response<TmdbDiscoverResponse>
 

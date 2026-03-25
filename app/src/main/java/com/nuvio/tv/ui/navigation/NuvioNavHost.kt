@@ -890,6 +890,27 @@ fun NuvioNavHost(
             )
         }
 
+        composable(Screen.Discover.route) {
+            com.nuvio.tv.ui.screens.discover.DiscoverScreen(
+                showBuiltInHeader = !hideBuiltInHeaders,
+                onNavigateToDetail = { itemId, itemType, addonBaseUrl ->
+                    navController.navigate(Screen.Detail.createRoute(itemId, itemType, addonBaseUrl))
+                },
+                onNavigateToSeeAll = { categoryKey, categoryTitle ->
+                    navController.navigate(Screen.DiscoverSeeAll.createRoute(categoryKey, categoryTitle))
+                },
+                onPlayTrailer = { streamUrl, title, audioUrl ->
+                    navController.navigate(
+                        Screen.TrailerPlayer.createRoute(
+                            videoUrl = streamUrl,
+                            title = title,
+                            audioUrl = audioUrl
+                        )
+                    )
+                }
+            )
+        }
+
         composable(Screen.Library.route) {
             LibraryScreen(
                 showBuiltInHeader = !hideBuiltInHeaders,
@@ -1106,6 +1127,50 @@ fun NuvioNavHost(
                 onNavigateToDetail = { itemId, itemType, addonBaseUrl ->
                     navController.navigate(Screen.Detail.createRoute(itemId, itemType, addonBaseUrl))
                 }
+            )
+        }
+
+        composable(
+            route = Screen.DiscoverSeeAll.route,
+            arguments = listOf(
+                navArgument("categoryKey") { type = NavType.StringType },
+                navArgument("categoryTitle") { type = NavType.StringType }
+            )
+        ) {
+            com.nuvio.tv.ui.screens.discover.DiscoverSeeAllScreen(
+                onBackPress = { navController.popBackStack() },
+                onNavigateToDetail = { itemId, itemType, addonBaseUrl ->
+                    navController.navigate(Screen.Detail.createRoute(itemId, itemType, addonBaseUrl))
+                }
+            )
+        }
+
+        composable(
+            route = Screen.TrailerPlayer.route,
+            arguments = listOf(
+                navArgument("videoUrl") { type = NavType.StringType },
+                navArgument("title") { type = NavType.StringType },
+                navArgument("audioUrl") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                }
+            )
+        ) { backStackEntry ->
+            val videoUrl = java.net.URLDecoder.decode(
+                backStackEntry.arguments?.getString("videoUrl") ?: "", "UTF-8"
+            )
+            val title = java.net.URLDecoder.decode(
+                backStackEntry.arguments?.getString("title") ?: "", "UTF-8"
+            )
+            val audioUrl = backStackEntry.arguments?.getString("audioUrl")
+                ?.takeIf { it.isNotBlank() }
+                ?.let { java.net.URLDecoder.decode(it, "UTF-8") }
+            com.nuvio.tv.ui.screens.discover.TrailerPlayerScreen(
+                videoUrl = videoUrl,
+                audioUrl = audioUrl,
+                title = title,
+                onBackPress = { navController.popBackStack() }
             )
         }
     }

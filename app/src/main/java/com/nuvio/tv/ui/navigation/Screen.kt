@@ -193,4 +193,22 @@ sealed class Screen(val route: String) {
             return "collection_detail/$collectionId/${encode(collectionName)}"
         }
     }
+
+    data object DiscoverSeeAll : Screen("discover_see_all/{categoryKey}/{categoryTitle}") {
+        private fun encode(value: String): String =
+            URLEncoder.encode(value, "UTF-8").replace("+", "%20")
+
+        fun createRoute(categoryKey: String, categoryTitle: String): String {
+            return "discover_see_all/${encode(categoryKey)}/${encode(categoryTitle)}"
+        }
+    }
+
+    data object TrailerPlayer : Screen("trailer_player/{videoUrl}/{title}?audioUrl={audioUrl}") {
+        private fun encode(value: String): String =
+            URLEncoder.encode(value, "UTF-8").replace("+", "%20")
+
+        fun createRoute(videoUrl: String, title: String, audioUrl: String? = null): String {
+            return "trailer_player/${encode(videoUrl)}/${encode(title)}?audioUrl=${audioUrl?.let { encode(it) } ?: ""}"
+        }
+    }
 }

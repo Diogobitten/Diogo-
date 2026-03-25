@@ -822,6 +822,11 @@
     <string name="library_type_collection">Coleção</string>
     <string name="library_empty_collections">Nenhuma coleção encontrada</string>
     <string name="library_empty_collections_subtitle">Adicione filmes que pertencem a uma franquia para vê-los agrupados aqui</string>
+
+    <!-- Discover Screen -->
+    <string name="discover_latest_trailers">Trailers Mais Recentes</string>
+    <string name="discover_see_all">Exibir Todos</string>
+
     <string name="library_empty_local_title">Nenhum %1$s ainda</string>
     <string name="library_empty_trakt_title">Nenhum %1$s nesta lista</string>
     <string name="library_empty_local_subtitle">Comece a salvar seus favoritos para vê-los aqui</string>

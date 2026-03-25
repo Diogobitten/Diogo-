@@ -892,6 +892,11 @@
     <string name="library_type_collection">Collection</string>
     <string name="library_empty_collections">No collections found</string>
     <string name="library_empty_collections_subtitle">Add movies that belong to a franchise to see them grouped here</string>
+
+    <!-- Discover Screen -->
+    <string name="discover_latest_trailers">Latest Trailers</string>
+    <string name="discover_see_all">See All</string>
+
     <string name="library_empty_local_title">No %1$s yet</string>
     <string name="library_empty_trakt_title">No %1$s in this list</string>
     <string name="library_empty_local_subtitle">Start saving your favorites to see them here</string>

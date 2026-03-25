@@ -392,6 +392,7 @@ class MainActivity : ComponentActivity() {
                             Screen.HomeMovies.route,
                             Screen.HomeSeries.route,
                             Screen.Search.route,
+                            Screen.Discover.route,
                             Screen.Library.route,
                             Screen.Calendar.route,
                             Screen.Settings.route,
@@ -403,6 +404,7 @@ class MainActivity : ComponentActivity() {
                     val strNavMovies = stringResource(R.string.nav_movies)
                     val strNavSeries = stringResource(R.string.nav_series)
                     val strNavSearch = stringResource(R.string.nav_search)
+                    val strNavDiscover = stringResource(R.string.nav_discover)
                     val strNavLibrary = stringResource(R.string.nav_library)
                     val strNavCalendar = stringResource(R.string.nav_calendar)
                     val strNavAddons = stringResource(R.string.nav_addons)
@@ -413,6 +415,7 @@ class MainActivity : ComponentActivity() {
                         strNavMovies,
                         strNavSeries,
                         strNavSearch,
+                        strNavDiscover,
                         strNavLibrary,
                         strNavCalendar,
                         strNavAddons,
@@ -443,6 +446,11 @@ class MainActivity : ComponentActivity() {
                                 label = strNavSearch,
                                 iconRes = R.raw.sidebar_search,
                                 isDivider = true
+                            ),
+                            DrawerItem(
+                                route = Screen.Discover.route,
+                                label = strNavDiscover,
+                                iconRes = R.raw.sidebar_discover
                             ),
                             DrawerItem(
                                 route = Screen.Diobot.route,
