@@ -184,4 +184,13 @@ sealed class Screen(val route: String) {
             return "tmdb_entity_browse/${encode(entityKind)}/$entityId/${encode(entityName)}?sourceType=${sourceType?.let { encode(it) } ?: ""}"
         }
     }
+
+    data object CollectionDetail : Screen("collection_detail/{collectionId}/{collectionName}") {
+        private fun encode(value: String): String =
+            URLEncoder.encode(value, "UTF-8").replace("+", "%20")
+
+        fun createRoute(collectionId: Int, collectionName: String): String {
+            return "collection_detail/$collectionId/${encode(collectionName)}"
+        }
+    }
 }

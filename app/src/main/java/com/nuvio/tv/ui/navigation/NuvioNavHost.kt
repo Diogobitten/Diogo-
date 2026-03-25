@@ -895,6 +895,9 @@ fun NuvioNavHost(
                 showBuiltInHeader = !hideBuiltInHeaders,
                 onNavigateToDetail = { itemId, itemType, addonBaseUrl ->
                     navController.navigate(Screen.Detail.createRoute(itemId, itemType, addonBaseUrl))
+                },
+                onNavigateToCollection = { collectionId, collectionName ->
+                    navController.navigate(Screen.CollectionDetail.createRoute(collectionId, collectionName))
                 }
             )
         }
@@ -1084,6 +1087,21 @@ fun NuvioNavHost(
             )
         ) {
             TmdbEntityBrowseScreen(
+                onBackPress = { navController.popBackStack() },
+                onNavigateToDetail = { itemId, itemType, addonBaseUrl ->
+                    navController.navigate(Screen.Detail.createRoute(itemId, itemType, addonBaseUrl))
+                }
+            )
+        }
+
+        composable(
+            route = Screen.CollectionDetail.route,
+            arguments = listOf(
+                navArgument("collectionId") { type = NavType.StringType },
+                navArgument("collectionName") { type = NavType.StringType }
+            )
+        ) {
+            com.nuvio.tv.ui.screens.collection.CollectionDetailScreen(
                 onBackPress = { navController.popBackStack() },
                 onNavigateToDetail = { itemId, itemType, addonBaseUrl ->
                     navController.navigate(Screen.Detail.createRoute(itemId, itemType, addonBaseUrl))

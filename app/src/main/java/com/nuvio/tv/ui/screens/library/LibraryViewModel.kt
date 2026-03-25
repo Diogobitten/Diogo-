@@ -11,14 +11,20 @@ import com.nuvio.tv.domain.model.TraktListPrivacy
 import com.nuvio.tv.domain.repository.LibraryRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import com.nuvio.tv.R
 import java.util.Locale
 import javax.inject.Inject
@@ -29,7 +35,9 @@ data class LibraryTypeTab(
 ) {
     companion object {
         const val ALL_KEY = "__all__"
+        const val COLLECTION_KEY = "__collection__"
         val All = LibraryTypeTab(key = ALL_KEY, label = "All")
+        val Collection = LibraryTypeTab(key = COLLECTION_KEY, label = "Coleção")
     }
 }
 
@@ -66,6 +74,9 @@ data class LibraryUiState(
     val sourceMode: LibrarySourceMode = LibrarySourceMode.LOCAL,
     val allItems: List<LibraryEntry> = emptyList(),
     val visibleItems: List<LibraryEntry> = emptyList(),
+    val collectionItems: List<LibraryCollectionItem> = emptyList(),
+    val isCollectionView: Boolean = false,
+    val isCollectionsLoading: Boolean = false,
     val listTabs: List<LibraryListTab> = emptyList(),
     val availableTypeTabs: List<LibraryTypeTab> = emptyList(),
     val availableSortOptions: List<LibrarySortOption> = emptyList(),
@@ -85,10 +96,21 @@ data class LibraryUiState(
     val pendingOperation: Boolean = false
 )
 
+data class LibraryCollectionItem(
+    val collectionId: Int,
+    val collectionName: String,
+    val posterUrl: String?,
+    val backdropUrl: String?,
+    val movieCount: Int
+)
+
 @HiltViewModel
 class LibraryViewModel @Inject constructor(
     private val libraryRepository: LibraryRepository,
-    private val layoutPreferenceDataStore: LayoutPreferenceDataStore
+    private val layoutPreferenceDataStore: LayoutPreferenceDataStore,
+    private val tmdbMetadataService: com.nuvio.tv.core.tmdb.TmdbMetadataService,
+    private val tmdbService: com.nuvio.tv.core.tmdb.TmdbService,
+    private val tmdbSettingsDataStore: com.nuvio.tv.data.local.TmdbSettingsDataStore
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(LibraryUiState())
@@ -103,8 +125,12 @@ class LibraryViewModel @Inject constructor(
 
     fun onSelectTypeTab(tab: LibraryTypeTab) {
         _uiState.update { current ->
-            val updated = current.copy(selectedTypeTab = tab)
-            updated.withVisibleItems()
+            val isCollection = tab.key == LibraryTypeTab.COLLECTION_KEY
+            val updated = current.copy(selectedTypeTab = tab, isCollectionView = isCollection)
+            if (isCollection) updated else updated.withVisibleItems()
+        }
+        if (tab.key == LibraryTypeTab.COLLECTION_KEY) {
+            loadCollections()
         }
     }
 
@@ -127,6 +153,70 @@ class LibraryViewModel @Inject constructor(
                 sortSelectionVersion = nextVersion
             )
             updated.withVisibleItems()
+        }
+    }
+
+    private var collectionsJob: Job? = null
+
+    private fun loadCollections() {
+        collectionsJob?.cancel()
+        _uiState.update { it.copy(isCollectionsLoading = true, collectionItems = emptyList()) }
+        collectionsJob = viewModelScope.launch {
+            try {
+                val language = tmdbSettingsDataStore.settings.first().language
+                val movieItems = _uiState.value.allItems.filter {
+                    it.type.trim().lowercase(Locale.ROOT) == "movie"
+                }
+                val semaphore = Semaphore(6)
+                val collectionMap = linkedMapOf<Int, LibraryCollectionItem>()
+
+                val results = coroutineScope {
+                    movieItems.map { entry ->
+                        async {
+                            semaphore.withPermit {
+                                try {
+                                    val tmdbId = tmdbService.ensureTmdbId(entry.id, entry.type)
+                                        ?: return@withPermit null
+                                    val enrichment = tmdbMetadataService.fetchEnrichment(
+                                        tmdbId = tmdbId,
+                                        contentType = com.nuvio.tv.domain.model.ContentType.MOVIE,
+                                        language = language
+                                    ) ?: return@withPermit null
+                                    val collId = enrichment.collectionId ?: return@withPermit null
+                                    val collName = enrichment.collectionName ?: return@withPermit null
+                                    Triple(collId, collName, entry.id)
+                                } catch (_: Exception) {
+                                    null
+                                }
+                            }
+                        }
+                    }.awaitAll().filterNotNull()
+                }
+
+                for ((collId, collName, _) in results) {
+                    val existing = collectionMap[collId]
+                    if (existing != null) {
+                        collectionMap[collId] = existing.copy(movieCount = existing.movieCount + 1)
+                    } else {
+                        val collResp = runCatching {
+                            tmdbMetadataService.fetchCollectionDetail(collId, language)
+                        }.getOrNull()
+                        collectionMap[collId] = LibraryCollectionItem(
+                            collectionId = collId,
+                            collectionName = collName,
+                            posterUrl = collResp?.posterUrl,
+                            backdropUrl = collResp?.backdropUrl,
+                            movieCount = 1
+                        )
+                    }
+                }
+
+                val sorted = collectionMap.values.sortedByDescending { it.movieCount }
+                _uiState.update { it.copy(collectionItems = sorted, isCollectionsLoading = false) }
+            } catch (e: Exception) {
+                android.util.Log.w("LibraryViewModel", "Failed to load collections: ${e.message}", e)
+                _uiState.update { it.copy(isCollectionsLoading = false) }
+            }
         }
     }
 
@@ -465,7 +555,13 @@ class LibraryViewModel @Inject constructor(
                 label = prettifyTypeLabel(key)
             )
         }
-        return listOf(LibraryTypeTab.All) + byKey.values
+        val hasMovies = items.any { it.type.trim().lowercase(Locale.ROOT) == "movie" }
+        val tabs = mutableListOf(LibraryTypeTab.All)
+        tabs.addAll(byKey.values)
+        if (hasMovies) {
+            tabs.add(LibraryTypeTab.Collection)
+        }
+        return tabs
     }
 
     private fun prettifyTypeLabel(key: String): String {

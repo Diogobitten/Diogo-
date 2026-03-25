@@ -81,6 +81,7 @@ import com.nuvio.tv.ui.theme.NuvioTheme
 import com.nuvio.tv.ui.util.formatAddonTypeLabel
 import kotlinx.coroutines.delay
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.draw.clip
 import com.nuvio.tv.R
 
 private const val KEY_REPEAT_THROTTLE_MS = 80L
@@ -88,6 +89,7 @@ private const val KEY_REPEAT_THROTTLE_MS = 80L
 @Composable
 private fun localizedTypeLabel(key: String): String = when (key.lowercase()) {
     LibraryTypeTab.ALL_KEY -> stringResource(R.string.library_type_all)
+    LibraryTypeTab.COLLECTION_KEY -> stringResource(R.string.library_type_collection)
     "movie" -> stringResource(R.string.type_movie)
     "series" -> stringResource(R.string.type_series)
     else -> formatAddonTypeLabel(key)
@@ -98,7 +100,8 @@ private fun localizedTypeLabel(key: String): String = when (key.lowercase()) {
 fun LibraryScreen(
     viewModel: LibraryViewModel = hiltViewModel(),
     showBuiltInHeader: Boolean = true,
-    onNavigateToDetail: (String, String, String?) -> Unit
+    onNavigateToDetail: (String, String, String?) -> Unit,
+    onNavigateToCollection: (Int, String) -> Unit = { _, _ -> }
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var showDeleteConfirm by remember { mutableStateOf(false) }
@@ -285,6 +288,32 @@ fun LibraryScreen(
             }
         }
 
+        if (uiState.isCollectionView) {
+            // Collection view
+            if (uiState.isCollectionsLoading) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    LoadingIndicator()
+                }
+            } else if (uiState.collectionItems.isEmpty()) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    EmptyScreenState(
+                        title = stringResource(R.string.library_empty_collections),
+                        subtitle = stringResource(R.string.library_empty_collections_subtitle),
+                        icon = Icons.Default.BookmarkBorder
+                    )
+                }
+            }
+
+            items(uiState.collectionItems, key = { "collection:${it.collectionId}" }) { collection ->
+                CollectionCard(
+                    collection = collection,
+                    posterCardStyle = posterCardStyle,
+                    onClick = {
+                        onNavigateToCollection(collection.collectionId, collection.collectionName)
+                    }
+                )
+            }
+        } else {
         if (uiState.visibleItems.isEmpty()) {
             item(span = { GridItemSpan(maxLineSpan) }) {
                 val selectedTypeLabel = uiState.selectedTypeTab?.let { localizedTypeLabel(it.key) }?.lowercase() ?: stringResource(R.string.library_type_items)
@@ -320,6 +349,7 @@ fun LibraryScreen(
                 }
             )
         }
+        } // end else (non-collection view)
 
         item(span = { GridItemSpan(maxLineSpan) }) { Spacer(modifier = Modifier.height(8.dp)) }
     }
@@ -963,5 +993,99 @@ private fun ConfirmDeleteDialog(
         ) {
             Text(stringResource(R.string.library_list_delete))
         }
+    }
+}
+
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun CollectionCard(
+    collection: LibraryCollectionItem,
+    posterCardStyle: com.nuvio.tv.ui.components.PosterCardStyle,
+    onClick: () -> Unit
+) {
+    val cardShape = remember(posterCardStyle.cornerRadius) {
+        RoundedCornerShape(posterCardStyle.cornerRadius)
+    }
+    val density = LocalDensity.current
+    val requestWidthPx = remember(density, posterCardStyle.width) { with(density) { posterCardStyle.width.roundToPx() } }
+    val requestHeightPx = remember(density, posterCardStyle.height) { with(density) { posterCardStyle.height.roundToPx() } }
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    Column(modifier = Modifier.width(posterCardStyle.width)) {
+        Card(
+            onClick = onClick,
+            modifier = Modifier
+                .width(posterCardStyle.width)
+                .height(posterCardStyle.height),
+            shape = CardDefaults.shape(shape = cardShape),
+            colors = CardDefaults.colors(
+                containerColor = Color.Transparent,
+                focusedContainerColor = Color.Transparent
+            ),
+            border = CardDefaults.border(
+                focusedBorder = androidx.tv.material3.Border(
+                    border = BorderStroke(posterCardStyle.focusedBorderWidth, NuvioColors.FocusRing),
+                    shape = cardShape
+                )
+            ),
+            scale = CardDefaults.scale(focusedScale = posterCardStyle.focusedScale)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(cardShape)
+            ) {
+                val imageUrl = collection.posterUrl
+                if (imageUrl != null) {
+                    val imageModel = remember(imageUrl, requestWidthPx, requestHeightPx) {
+                        coil.request.ImageRequest.Builder(context)
+                            .data(imageUrl)
+                            .crossfade(false)
+                            .allowHardware(true)
+                            .size(width = requestWidthPx, height = requestHeightPx)
+                            .memoryCacheKey("${imageUrl}_${requestWidthPx}x${requestHeightPx}")
+                            .diskCacheKey("${imageUrl}_${requestWidthPx}x${requestHeightPx}")
+                            .build()
+                    }
+                    coil.compose.AsyncImage(
+                        model = imageModel,
+                        contentDescription = collection.collectionName,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                    )
+                } else {
+                    com.nuvio.tv.ui.components.MonochromePosterPlaceholder()
+                }
+
+                // Movie count badge
+                Box(
+                    modifier = Modifier
+                        .align(androidx.compose.ui.Alignment.BottomEnd)
+                        .padding(6.dp)
+                        .background(
+                            Color.Black.copy(alpha = 0.7f),
+                            RoundedCornerShape(6.dp)
+                        )
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = "${collection.movieCount}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White
+                    )
+                }
+            }
+        }
+
+        Text(
+            text = collection.collectionName,
+            style = MaterialTheme.typography.titleMedium,
+            color = NuvioColors.TextPrimary,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .width(posterCardStyle.width)
+                .padding(top = 8.dp, start = 2.dp, end = 2.dp)
+        )
     }
 }

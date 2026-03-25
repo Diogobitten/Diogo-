@@ -1046,6 +1046,121 @@ class TmdbMetadataService @Inject constructor(
             genres = emptyList()
         )
     }
+
+    private val collectionDetailCache = ConcurrentHashMap<String, CollectionDetail>()
+
+    suspend fun fetchCollectionDetail(
+        collectionId: Int,
+        language: String = "en"
+    ): CollectionDetail? = withContext(Dispatchers.IO) {
+        val normalizedLanguage = normalizeTmdbLanguage(language)
+        val cacheKey = "$collectionId:$normalizedLanguage:detail"
+        collectionDetailCache[cacheKey]?.let { return@withContext it }
+
+        try {
+            val resp = tmdbApi.getCollectionDetails(collectionId, TMDB_API_KEY, normalizedLanguage).body()
+                ?: return@withContext null
+            val sortedParts = resp.parts.orEmpty().sortedBy { it.releaseDate ?: "9999" }
+
+            val includeImageLanguage = buildString {
+                append(normalizedLanguage.substringBefore("-"))
+                append(",")
+                append(normalizedLanguage)
+                append(",en,null")
+            }
+
+            // Fetch logo for the collection
+            val logoPath = sortedParts.firstOrNull()?.let { firstPart ->
+                runCatching {
+                    tmdbApi.getMovieImages(firstPart.id, TMDB_API_KEY, includeImageLanguage).body()
+                }.getOrNull()?.logos
+                    ?.sortedWith(
+                        compareByDescending<TmdbImage> { it.iso6391 == normalizedLanguage.substringBefore("-") }
+                            .thenByDescending { it.iso6391 == "en" }
+                            .thenByDescending { it.iso6391 == null }
+                    )
+                    ?.firstOrNull()?.filePath
+            }
+
+            val semaphore = Semaphore(6)
+            val parts = coroutineScope {
+                sortedParts.map { part ->
+                    async {
+                        semaphore.withPermit {
+                            val title = part.title ?: return@async null
+                            val poster = buildImageUrl(part.posterPath, "w500")
+                            val backdrop = buildImageUrl(part.backdropPath, "original")
+                            val year = part.releaseDate?.take(4)
+
+                            // Resolve IMDB ID
+                            val imdbId = runCatching {
+                                tmdbApi.getMovieExternalIds(part.id, TMDB_API_KEY).body()?.imdbId
+                            }.getOrNull()
+
+                            MetaPreview(
+                                id = imdbId ?: "tmdb:${part.id}",
+                                type = ContentType.MOVIE,
+                                name = title,
+                                poster = poster ?: backdrop,
+                                posterShape = PosterShape.POSTER,
+                                background = backdrop,
+                                logo = null,
+                                description = part.overview?.takeIf { it.isNotBlank() },
+                                releaseInfo = year,
+                                imdbRating = part.voteAverage?.toFloat(),
+                                imdbId = imdbId,
+                                genres = emptyList()
+                            )
+                        }
+                    }
+                }.awaitAll().filterNotNull()
+            }
+
+            val detail = CollectionDetail(
+                id = resp.id,
+                name = resp.name ?: "Collection",
+                overview = resp.overview?.takeIf { it.isNotBlank() },
+                posterUrl = buildImageUrl(resp.posterPath, "w500"),
+                backdropUrl = buildImageUrl(resp.backdropPath, "original"),
+                logoUrl = buildImageUrl(logoPath, "w500"),
+                firstMovieTmdbId = sortedParts.firstOrNull()?.id,
+                parts = parts
+            )
+            collectionDetailCache[cacheKey] = detail
+            detail
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to fetch collection detail: ${e.message}", e)
+            null
+        }
+    }
+
+    /**
+     * Resolves TMDB collection info for a movie by its IMDB or TMDB ID.
+     * Returns the collectionId and collectionName if the movie belongs to a collection.
+     */
+    suspend fun resolveCollectionForMovie(
+        movieId: String,
+        mediaType: String,
+        language: String = "en"
+    ): Pair<Int, String>? = withContext(Dispatchers.IO) {
+        try {
+            val normalizedLanguage = normalizeTmdbLanguage(language)
+            // Check enrichment cache first
+            val cleanId = movieId.removePrefix("tmdb:")
+            val tmdbIdStr = if (cleanId.startsWith("tt")) null else cleanId.takeIf { it.all { c -> c.isDigit() } }
+            val contentType = ContentType.MOVIE
+            val cacheKey = "${tmdbIdStr ?: movieId}:${contentType.name}:$normalizedLanguage"
+            enrichmentCache[cacheKey]?.let { enrichment ->
+                if (enrichment.collectionId != null && enrichment.collectionName != null) {
+                    return@withContext enrichment.collectionId to enrichment.collectionName
+                }
+            }
+            // If not cached, we need to fetch — but only if we have a TMDB ID
+            null
+        } catch (_: Exception) {
+            null
+        }
+    }
 }
 
 private data class Quadruple<A, B, C, D>(
@@ -1177,4 +1292,25 @@ data class TmdbEntityBrowseData(
 data class TmdbEntityRailPageResult(
     val items: List<MetaPreview>,
     val hasMore: Boolean
+)
+
+// ── Library Collection Models ──
+
+data class LibraryCollectionInfo(
+    val collectionId: Int,
+    val collectionName: String,
+    val posterUrl: String?,
+    val backdropUrl: String?,
+    val libraryMovieIds: List<String>
+)
+
+data class CollectionDetail(
+    val id: Int,
+    val name: String,
+    val overview: String?,
+    val posterUrl: String?,
+    val backdropUrl: String?,
+    val logoUrl: String?,
+    val firstMovieTmdbId: Int?,
+    val parts: List<MetaPreview>
 )
