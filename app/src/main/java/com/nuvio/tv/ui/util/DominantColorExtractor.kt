@@ -84,9 +84,9 @@ private suspend fun extractDominantColor(
                     val g = ((rgb shr 8) and 0xFF) / 255f
                     val b = (rgb and 0xFF) / 255f
                     val color = Color(
-                        red = r * 0.45f,
-                        green = g * 0.45f,
-                        blue = b * 0.45f,
+                        red = r * 0.28f,
+                        green = g * 0.28f,
+                        blue = b * 0.28f,
                         alpha = 1f
                     )
                     dominantColorCache[imageUrl] = color
