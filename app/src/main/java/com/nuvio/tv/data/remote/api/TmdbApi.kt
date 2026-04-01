@@ -199,6 +199,41 @@ interface TmdbApi {
         @Query("page") page: Int = 1
     ): Response<TmdbSearchMultiResponse>
 
+    @GET("trending/movie/day")
+    suspend fun getTrendingMoviesDaily(
+        @Query("api_key") apiKey: String,
+        @Query("language") language: String = "pt-BR",
+        @Query("page") page: Int = 1
+    ): Response<TmdbSearchMultiResponse>
+
+    @GET("trending/tv/day")
+    suspend fun getTrendingTvDaily(
+        @Query("api_key") apiKey: String,
+        @Query("language") language: String = "pt-BR",
+        @Query("page") page: Int = 1
+    ): Response<TmdbSearchMultiResponse>
+
+    @GET("tv/popular")
+    suspend fun getPopularTv(
+        @Query("api_key") apiKey: String,
+        @Query("language") language: String = "pt-BR",
+        @Query("page") page: Int = 1
+    ): Response<TmdbSearchMultiResponse>
+
+    @GET("tv/top_rated")
+    suspend fun getTopRatedTv(
+        @Query("api_key") apiKey: String,
+        @Query("language") language: String = "pt-BR",
+        @Query("page") page: Int = 1
+    ): Response<TmdbSearchMultiResponse>
+
+    @GET("tv/on_the_air")
+    suspend fun getOnTheAirTv(
+        @Query("api_key") apiKey: String,
+        @Query("language") language: String = "pt-BR",
+        @Query("page") page: Int = 1
+    ): Response<TmdbSearchMultiResponse>
+
     @GET("movie/now_playing")
     suspend fun getNowPlayingMovies(
         @Query("api_key") apiKey: String,

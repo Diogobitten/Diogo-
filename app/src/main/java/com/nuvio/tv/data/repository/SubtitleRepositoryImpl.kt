@@ -21,7 +21,8 @@ import javax.inject.Inject
 class SubtitleRepositoryImpl @Inject constructor(
     private val api: AddonApi,
     private val addonRepository: AddonRepositoryImpl,
-    private val subtitleFormatUtils: SubtitleFormatUtils
+    private val subtitleFormatUtils: SubtitleFormatUtils,
+    private val openSubtitlesService: OpenSubtitlesService
 ) : SubtitleRepository {
 
     companion object {
@@ -66,7 +67,7 @@ class SubtitleRepositoryImpl @Inject constructor(
         
         // Fetch subtitles from all addons in parallel
         val result = coroutineScope {
-            subtitleAddons.map { addon ->
+            val addonJobs = subtitleAddons.map { addon ->
                 async {
                     val addonStartMs = System.currentTimeMillis()
                     val subtitles = withTimeoutOrNull(PER_ADDON_TIMEOUT_MS) {
@@ -86,7 +87,28 @@ class SubtitleRepositoryImpl @Inject constructor(
                         subtitles
                     }
                 }
-            }.awaitAll().flatten()
+            }
+
+            // Also fetch from OpenSubtitles in parallel if configured
+            val openSubsJob: kotlinx.coroutines.Deferred<List<Subtitle>>? = if (openSubtitlesService.isConfigured()) {
+                async {
+                    withTimeoutOrNull(PER_ADDON_TIMEOUT_MS) {
+                        val season = videoId?.let { parseSeasonFromVideoId(it) }
+                        val episode = videoId?.let { parseEpisodeFromVideoId(it) }
+                        openSubtitlesService.searchSubtitles(
+                            imdbId = id.takeIf { it.startsWith("tt") },
+                            type = requestType,
+                            season = season,
+                            episode = episode,
+                            movieHash = videoHash
+                        )
+                    } ?: emptyList()
+                }
+            } else null
+
+            val addonResults = addonJobs.awaitAll().flatten()
+            val openSubsResults = openSubsJob?.await().orEmpty()
+            addonResults + openSubsResults
         }
         Log.d(
             TAG,
@@ -193,5 +215,17 @@ class SubtitleRepositoryImpl @Inject constructor(
         } else {
             ""
         }
+    }
+
+    /** Parses season number from a videoId like "tt1234567:2:5" → 2 */
+    private fun parseSeasonFromVideoId(videoId: String): Int? {
+        val parts = videoId.split(":")
+        return if (parts.size >= 2) parts[1].toIntOrNull() else null
+    }
+
+    /** Parses episode number from a videoId like "tt1234567:2:5" → 5 */
+    private fun parseEpisodeFromVideoId(videoId: String): Int? {
+        val parts = videoId.split(":")
+        return if (parts.size >= 3) parts[2].toIntOrNull() else null
     }
 }

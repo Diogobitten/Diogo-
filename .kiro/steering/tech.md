@@ -88,6 +88,7 @@
 - See `local.example.properties` for required keys
 - `TMDB_API_KEY` is set in `defaultConfig` (from `local.properties`) and applies to all build types
 - `OPENAI_API_KEY` is set in `defaultConfig` (from `local.properties`) and applies to all build types — used by Diobot AI Concierge and AI Recommendations ("Feito pra Você 🤖")
+- `OPENSUBTITLES_API_KEY` is set in `defaultConfig` (from `local.properties`) — optional, enables OpenSubtitles.com subtitle search alongside Stremio addon subtitles
 - Debug build type overrides Supabase/server URLs from `local.dev.properties` but inherits `TMDB_API_KEY` from `defaultConfig`
 - Environment variables override local.properties (used in CI): `NUVIO_RELEASE_STORE_FILE`, `NUVIO_RELEASE_KEY_ALIAS`, etc.
 - Debug builds use `com.nuviodebug.com` applicationId; release uses `com.nuvio.tv`

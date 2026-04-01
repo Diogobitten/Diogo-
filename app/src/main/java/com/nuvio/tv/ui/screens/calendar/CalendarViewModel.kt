@@ -37,7 +37,6 @@ class CalendarViewModel @Inject constructor(
 
     fun changeMonth(month: LocalDate) {
         _uiState.update { it.copy(currentMonth = month.withDayOfMonth(1)) }
-        // Reload with extended range if needed
         loadCalendar()
     }
 
@@ -46,8 +45,8 @@ class CalendarViewModel @Inject constructor(
             _uiState.update { it.copy(isLoading = true, error = null) }
 
             try {
-                // Fetch 90 days to cover current + next months
-                val items = calendarRepository.getCalendarItems(days = 90)
+                // Fetch 90 days forward + 90 days back to keep past calendar entries visible
+                val items = calendarRepository.getCalendarItems(days = 90, pastDays = 90)
                 val byDate = items.groupBy { it.date }
 
                 val today = LocalDate.now()

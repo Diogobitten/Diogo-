@@ -80,14 +80,24 @@ class DiscoverViewModel @Inject constructor(
             val trailers = trailersDeferred.await()
             _uiState.value = _uiState.value.copy(trailers = trailers)
 
+            val trendingMoviesDeferred = async { discoverService.getTrendingMovies(language) }
+            val nowPlayingDeferred = async { discoverService.getNowPlaying(language) }
             val upcomingDeferred = async { discoverService.getUpcoming(language) }
+            val trendingSeriesDeferred = async { discoverService.getTrendingSeries(language) }
+            val popularSeriesDeferred = async { discoverService.getPopularSeries(language) }
+            val topRatedSeriesDeferred = async { discoverService.getTopRatedSeries(language) }
             val best90sDeferred = async { discoverService.getBest90s(language) }
             val best80sDeferred = async { discoverService.getBest80s(language) }
             val werewolfDeferred = async { discoverService.getWerewolfMovies(language) }
             val vampireDeferred = async { discoverService.getVampireMovies(language) }
             val oscarDeferred = async { discoverService.getOscarWinners(language) }
 
+            val trendingMovies = discoverService.enrichWithImdbIds(trendingMoviesDeferred.await(), ContentType.MOVIE)
+            val nowPlaying = discoverService.enrichWithImdbIds(nowPlayingDeferred.await(), ContentType.MOVIE)
             val upcoming = discoverService.enrichWithImdbIds(upcomingDeferred.await(), ContentType.MOVIE)
+            val trendingSeries = discoverService.enrichWithImdbIds(trendingSeriesDeferred.await(), ContentType.SERIES)
+            val popularSeries = discoverService.enrichWithImdbIds(popularSeriesDeferred.await(), ContentType.SERIES)
+            val topRatedSeries = discoverService.enrichWithImdbIds(topRatedSeriesDeferred.await(), ContentType.SERIES)
             val best90s = discoverService.enrichWithImdbIds(best90sDeferred.await(), ContentType.MOVIE)
             val best80s = discoverService.enrichWithImdbIds(best80sDeferred.await(), ContentType.MOVIE)
             val werewolf = discoverService.enrichWithImdbIds(werewolfDeferred.await(), ContentType.MOVIE)
@@ -95,12 +105,17 @@ class DiscoverViewModel @Inject constructor(
             val oscar = discoverService.enrichWithImdbIds(oscarDeferred.await(), ContentType.MOVIE)
 
             val categories = listOfNotNull(
+                trendingMovies.takeIf { it.isNotEmpty() }?.let { DiscoverCategory("trending_movies", "Filmes em Alta \uD83D\uDD25", it) },
+                nowPlaying.takeIf { it.isNotEmpty() }?.let { DiscoverCategory("now_playing", "Em Cartaz", it) },
+                trendingSeries.takeIf { it.isNotEmpty() }?.let { DiscoverCategory("trending_tv", "Séries em Alta \uD83D\uDD25", it) },
+                popularSeries.takeIf { it.isNotEmpty() }?.let { DiscoverCategory("popular_tv", "Séries Populares", it) },
                 upcoming.takeIf { it.isNotEmpty() }?.let { DiscoverCategory("upcoming", "Em Breve", it) },
+                topRatedSeries.takeIf { it.isNotEmpty() }?.let { DiscoverCategory("top_rated_tv", "Séries Mais Bem Avaliadas", it) },
+                oscar.takeIf { it.isNotEmpty() }?.let { DiscoverCategory("oscar", "Oscar — Melhor Filme", it) },
                 best90s.takeIf { it.isNotEmpty() }?.let { DiscoverCategory("best90s", "Melhores dos Anos 90", it) },
                 best80s.takeIf { it.isNotEmpty() }?.let { DiscoverCategory("best80s", "Melhores dos Anos 80", it) },
                 werewolf.takeIf { it.isNotEmpty() }?.let { DiscoverCategory("werewolf", "Filmes de Lobisomem", it) },
-                vampire.takeIf { it.isNotEmpty() }?.let { DiscoverCategory("vampire", "Filmes de Vampiro", it) },
-                oscar.takeIf { it.isNotEmpty() }?.let { DiscoverCategory("oscar", "Oscar — Melhor Filme", it) }
+                vampire.takeIf { it.isNotEmpty() }?.let { DiscoverCategory("vampire", "Filmes de Vampiro", it) }
             )
 
             _uiState.value = _uiState.value.copy(isLoading = false, categories = categories)

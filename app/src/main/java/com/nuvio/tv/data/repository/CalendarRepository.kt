@@ -3,7 +3,6 @@ package com.nuvio.tv.data.repository
 import android.util.Log
 import com.nuvio.tv.core.tmdb.TmdbService
 import com.nuvio.tv.data.remote.api.TmdbApi
-import com.nuvio.tv.data.remote.api.TraktApi
 import com.nuvio.tv.domain.model.CalendarItem
 import com.nuvio.tv.domain.model.CalendarItemType
 import com.nuvio.tv.domain.model.LibraryEntry
@@ -15,7 +14,6 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
-import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -23,121 +21,19 @@ private const val TAG = "CalendarRepository"
 
 @Singleton
 class CalendarRepository @Inject constructor(
-    private val traktApi: TraktApi,
-    private val traktAuthService: TraktAuthService,
     private val tmdbApi: TmdbApi,
     private val tmdbService: TmdbService,
     private val libraryRepository: LibraryRepository
 ) {
     suspend fun getCalendarItems(days: Int = 30, pastDays: Int = 0): List<CalendarItem> = withContext(Dispatchers.IO) {
-        val allItems = mutableListOf<CalendarItem>()
-
-        // Try Trakt personalized calendar
         try {
-            val traktItems = fetchFromTrakt(days, pastDays)
-            if (traktItems != null) {
-                Log.d(TAG, "Trakt calendar returned ${traktItems.size} items")
-                allItems.addAll(traktItems)
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Trakt calendar failed: ${e.message}")
-        }
-
-        // Always also check TMDB for library items (covers non-Trakt users
-        // and items Trakt might miss like digital releases)
-        try {
-            val tmdbItems = fetchFromTmdb(days, pastDays)
-            Log.d(TAG, "TMDB calendar returned ${tmdbItems.size} items")
-            // Merge, avoiding duplicates by tmdbId+type
-            val existingKeys = allItems.map { "${it.tmdbId}_${it.type}" }.toSet()
-            tmdbItems.forEach { item ->
-                val key = "${item.tmdbId}_${item.type}"
-                if (key !in existingKeys) {
-                    allItems.add(item)
-                }
-            }
+            val items = fetchFromTmdb(days, pastDays)
+            Log.d(TAG, "TMDB calendar returned ${items.size} items")
+            items.sortedBy { it.date }
         } catch (e: Exception) {
             Log.e(TAG, "TMDB calendar failed: ${e.message}", e)
+            emptyList()
         }
-
-        Log.d(TAG, "Total calendar items: ${allItems.size}")
-        allItems.sortedBy { it.date }
-    }
-
-    private suspend fun fetchFromTrakt(days: Int, pastDays: Int = 0): List<CalendarItem>? {
-        if (!traktAuthService.hasRequiredCredentials()) return null
-
-        val state = traktAuthService.getCurrentAuthState()
-        if (state.accessToken.isNullOrBlank()) {
-            Log.d(TAG, "Trakt: not authenticated, skipping")
-            return null
-        }
-
-        val startDate = LocalDate.now().minusDays(pastDays.toLong()).format(DateTimeFormatter.ISO_LOCAL_DATE)
-        val totalDays = days + pastDays
-        Log.d(TAG, "Trakt: fetching calendar from $startDate for $totalDays days")
-
-        val showsResponse = traktAuthService.executeAuthorizedRequest { auth ->
-            traktApi.getMyCalendarShows(auth, startDate, totalDays)
-        }
-        val moviesResponse = traktAuthService.executeAuthorizedRequest { auth ->
-            traktApi.getMyCalendarMovies(auth, startDate, totalDays)
-        }
-
-        if (showsResponse == null && moviesResponse == null) {
-            Log.w(TAG, "Trakt: both calendar requests returned null (circuit open?)")
-            return null
-        }
-
-        val items = mutableListOf<CalendarItem>()
-
-        val shows = showsResponse?.body().orEmpty()
-        val movies = moviesResponse?.body().orEmpty()
-        Log.d(TAG, "Trakt: ${shows.size} show episodes, ${movies.size} movies")
-
-        shows.forEach { dto ->
-            val show = dto.show ?: return@forEach
-            val ep = dto.episode ?: return@forEach
-            val date = dto.firstAired?.take(10) ?: return@forEach
-            items.add(
-                CalendarItem(
-                    id = "trakt_show_${show.ids?.trakt}_${ep.season}_${ep.number}",
-                    title = ep.title ?: "Episode ${ep.number}",
-                    type = CalendarItemType.EPISODE,
-                    date = date,
-                    poster = null,
-                    backdrop = null,
-                    tmdbId = show.ids?.tmdb,
-                    traktId = show.ids?.trakt,
-                    imdbId = show.ids?.imdb,
-                    showName = show.title,
-                    season = ep.season,
-                    episode = ep.number,
-                    episodeName = ep.title
-                )
-            )
-        }
-
-        movies.forEach { dto ->
-            val movie = dto.movie ?: return@forEach
-            val date = dto.released ?: return@forEach
-            items.add(
-                CalendarItem(
-                    id = "trakt_movie_${movie.ids?.trakt}",
-                    title = movie.title ?: "Unknown",
-                    type = CalendarItemType.MOVIE,
-                    date = date,
-                    poster = null,
-                    backdrop = null,
-                    tmdbId = movie.ids?.tmdb,
-                    traktId = movie.ids?.trakt,
-                    imdbId = movie.ids?.imdb,
-                    year = movie.year
-                )
-            )
-        }
-
-        return enrichWithTmdbImages(items)
     }
 
     private suspend fun fetchFromTmdb(days: Int, pastDays: Int = 0): List<CalendarItem> {
@@ -335,31 +231,4 @@ class CalendarRepository @Inject constructor(
         return emptyList()
     }
 
-    private suspend fun enrichWithTmdbImages(items: List<CalendarItem>): List<CalendarItem> {
-        if (items.isEmpty()) return items
-        val apiKey = tmdbService.apiKey()
-        if (apiKey.isBlank()) return items
-
-        return coroutineScope {
-            items.map { item ->
-                async {
-                    if (item.poster != null) return@async item
-                    val tmdbId = item.tmdbId ?: return@async item
-                    try {
-                        val response = when (item.type) {
-                            CalendarItemType.EPISODE -> tmdbApi.getTvDetails(tmdbId, apiKey)
-                            CalendarItemType.MOVIE -> tmdbApi.getMovieDetails(tmdbId, apiKey)
-                        }
-                        val details = response.body() ?: return@async item
-                        item.copy(
-                            poster = details.posterPath?.let { "https://image.tmdb.org/t/p/w342$it" },
-                            backdrop = item.backdrop ?: details.backdropPath?.let { "https://image.tmdb.org/t/p/w780$it" }
-                        )
-                    } catch (_: Exception) {
-                        item
-                    }
-                }
-            }.awaitAll()
-        }
-    }
 }

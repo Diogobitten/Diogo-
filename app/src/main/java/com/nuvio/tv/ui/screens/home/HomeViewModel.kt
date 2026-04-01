@@ -119,17 +119,26 @@ class HomeViewModel @Inject constructor(
 
     internal val catalogsMap = linkedMapOf<String, CatalogRow>()
     internal val catalogOrder = mutableListOf<String>()
+    @Volatile
     internal var addonsCache: List<Addon> = emptyList()
+    @Volatile
     internal var homeCatalogOrderKeys: List<String> = emptyList()
+    @Volatile
     internal var disabledHomeCatalogKeys: Set<String> = emptySet()
+    @Volatile
     internal var currentHeroCatalogKeys: List<String> = emptyList()
     internal var catalogUpdateJob: Job? = null
+    @Volatile
     internal var hasRenderedFirstCatalog = false
     internal val catalogLoadSemaphore = Semaphore(MAX_CATALOG_LOAD_CONCURRENCY)
+    @Volatile
     internal var pendingCatalogLoads = 0
     internal val activeCatalogLoadJobs = mutableSetOf<Job>()
+    @Volatile
     internal var activeCatalogLoadSignature: String? = null
+    @Volatile
     internal var catalogLoadGeneration: Long = 0L
+    @Volatile
     internal var catalogsLoadInProgress: Boolean = false
     internal data class TruncatedRowCacheEntry(
         val sourceRow: CatalogRow,
@@ -140,15 +149,24 @@ class HomeViewModel @Inject constructor(
     internal val trailerPreviewNegativeCache = mutableSetOf<String>()
     internal val trailerPreviewUrlsState = mutableStateMapOf<String, String>()
     internal val trailerPreviewAudioUrlsState = mutableStateMapOf<String, String>()
+    @Volatile
     internal var activeTrailerPreviewItemId: String? = null
+    @Volatile
     internal var trailerPreviewRequestVersion: Long = 0L
+    @Volatile
     internal var currentTmdbSettings: TmdbSettings = TmdbSettings()
+    @Volatile
     internal var traktDiscoveryRows: List<CatalogRow> = emptyList()
+    @Volatile
     internal var aiRecommendationRow: CatalogRow? = null
+    @Volatile
     internal var tmdbRecentlyReleasedRow: CatalogRow? = null
     internal var heroEnrichmentJob: Job? = null
+    @Volatile
     internal var lastHeroEnrichmentSignature: String? = null
+    @Volatile
     internal var lastHeroEnrichedItems: List<MetaPreview> = emptyList()
+    @Volatile
     internal var heroItemOrder: List<String> = emptyList()
     internal val prefetchedExternalMetaIds = Collections.synchronizedSet(mutableSetOf<String>())
     internal val externalMetaPrefetchInFlightIds = Collections.synchronizedSet(mutableSetOf<String>())
@@ -202,6 +220,14 @@ class HomeViewModel @Inject constructor(
             // AI recommendations are the least critical — load last
             delay(4000)
             loadAiRecommendations()
+        }
+        // Periodically refresh daily tips and new releases (handles day change on always-on TVs)
+        viewModelScope.launch {
+            while (true) {
+                delay(60 * 60 * 1000L) // check every hour
+                loadDailyTips()
+                loadNewReleases()
+            }
         }
     }
 

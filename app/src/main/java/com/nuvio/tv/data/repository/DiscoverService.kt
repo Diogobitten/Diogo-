@@ -1,4 +1,4 @@
-package com.nuvio.tv.data.repository
+'package com.nuvio.tv.data.repository
 
 import android.util.Log
 import com.nuvio.tv.BuildConfig
@@ -44,83 +44,60 @@ data class TrailerItem(
 class DiscoverService @Inject constructor(
     private val tmdbApi: TmdbApi
 ) {
-    private val cache = ConcurrentHashMap<String, List<MetaPreview>>()
-    private val trailerCache = ConcurrentHashMap<String, List<TrailerItem>>()
+    private data class CachedList(val items: List<MetaPreview>, val timestamp: Long)
+    private data class CachedTrailers(val items: List<TrailerItem>, val timestamp: Long)
+
+    companion object {
+        private const val CACHE_TTL_MS = 30 * 60 * 1000L // 30 minutes
+    }
+
+    private val cache = ConcurrentHashMap<String, CachedList>()
+    private val trailerCache = ConcurrentHashMap<String, CachedTrailers>()
 
     suspend fun getLatestTrailers(language: String = "pt-BR"): List<TrailerItem> =
         withContext(Dispatchers.IO) {
-            trailerCache["trailers:$language"]?.let { return@withContext it }
+            val cacheKey = "trailers:$language"
+            trailerCache[cacheKey]?.let { cached ->
+                if (System.currentTimeMillis() - cached.timestamp < CACHE_TTL_MS) return@withContext cached.items
+            }
             try {
-                // Only upcoming movies and upcoming/trending TV for trailers
-                val (movies, tvShows) = coroutineScope {
-                    val moviesDeferred = async {
-                        tmdbApi.getUpcomingMovies(apiKey = API_KEY, language = language).body()?.results.orEmpty()
+                // Use daily trending + now playing for the freshest trailers
+                val (trendingMovies, nowPlaying, trendingTv) = coroutineScope {
+                    val trendingMoviesDeferred = async {
+                        tmdbApi.getTrendingMoviesDaily(apiKey = API_KEY, language = language).body()?.results.orEmpty()
                     }
-                    val tvDeferred = async {
-                        tmdbApi.getTrendingTv(apiKey = API_KEY, language = language).body()?.results.orEmpty()
+                    val nowPlayingDeferred = async {
+                        tmdbApi.getNowPlayingMovies(apiKey = API_KEY, language = language).body()?.results.orEmpty()
                     }
-                    moviesDeferred.await() to tvDeferred.await()
+                    val trendingTvDeferred = async {
+                        tmdbApi.getTrendingTvDaily(apiKey = API_KEY, language = language).body()?.results.orEmpty()
+                    }
+                    Triple(trendingMoviesDeferred.await(), nowPlayingDeferred.await(), trendingTvDeferred.await())
                 }
+
+                // Merge trending + now playing movies, deduplicate by ID
+                val seenMovieIds = mutableSetOf<Int>()
+                val allMovies = (trendingMovies + nowPlaying).filter { seenMovieIds.add(it.id) }
 
                 val semaphore = Semaphore(6)
                 val items = coroutineScope {
-                    val movieTrailers = movies.take(10).map { movie ->
+                    val movieTrailers = allMovies.take(12).map { movie ->
                         async {
                             semaphore.withPermit {
-                                val tmdbId = movie.id
-                                val videos = runCatching {
-                                    tmdbApi.getMovieVideos(tmdbId, API_KEY, language).body()?.results.orEmpty()
-                                }.getOrDefault(emptyList())
-                                val trailer = videos.firstOrNull {
-                                    it.site == "YouTube" && it.type == "Trailer"
-                                } ?: videos.firstOrNull {
-                                    it.site == "YouTube" && it.type == "Teaser"
-                                }
-                                if (trailer?.key == null) return@async null
-                                TrailerItem(
-                                    id = "tmdb:$tmdbId",
-                                    tmdbId = tmdbId,
-                                    title = movie.title ?: movie.name ?: return@async null,
-                                    type = ContentType.MOVIE,
-                                    backdropUrl = movie.backdropPath?.let { "https://image.tmdb.org/t/p/original$it" },
-                                    posterUrl = movie.posterPath?.let { "https://image.tmdb.org/t/p/w500$it" },
-                                    youtubeKey = trailer.key,
-                                    releaseInfo = movie.releaseDate?.take(4),
-                                    rating = movie.voteAverage?.toFloat()
-                                )
+                                fetchTrailerForItem(movie.id, movie.title ?: movie.name, ContentType.MOVIE, movie, language)
                             }
                         }
                     }
-                    val tvTrailers = tvShows.take(6).map { show ->
+                    val tvTrailers = trendingTv.take(8).map { show ->
                         async {
                             semaphore.withPermit {
-                                val tmdbId = show.id
-                                val videos = runCatching {
-                                    tmdbApi.getTvVideos(tmdbId, API_KEY, language).body()?.results.orEmpty()
-                                }.getOrDefault(emptyList())
-                                val trailer = videos.firstOrNull {
-                                    it.site == "YouTube" && it.type == "Trailer"
-                                } ?: videos.firstOrNull {
-                                    it.site == "YouTube" && it.type == "Teaser"
-                                }
-                                if (trailer?.key == null) return@async null
-                                TrailerItem(
-                                    id = "tmdb:$tmdbId",
-                                    tmdbId = tmdbId,
-                                    title = show.name ?: show.title ?: return@async null,
-                                    type = ContentType.SERIES,
-                                    backdropUrl = show.backdropPath?.let { "https://image.tmdb.org/t/p/original$it" },
-                                    posterUrl = show.posterPath?.let { "https://image.tmdb.org/t/p/w500$it" },
-                                    youtubeKey = trailer.key,
-                                    releaseInfo = show.firstAirDate?.take(4),
-                                    rating = show.voteAverage?.toFloat()
-                                )
+                                fetchTrailerForItem(show.id, show.name ?: show.title, ContentType.SERIES, show, language)
                             }
                         }
                     }
                     (movieTrailers + tvTrailers).awaitAll().filterNotNull()
                 }
-                trailerCache["trailers:$language"] = items
+                trailerCache[cacheKey] = CachedTrailers(items, System.currentTimeMillis())
                 items
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to load trailers: ${e.message}", e)
@@ -128,10 +105,84 @@ class DiscoverService @Inject constructor(
             }
         }
 
+    private suspend fun fetchTrailerForItem(
+        tmdbId: Int,
+        title: String?,
+        type: ContentType,
+        item: com.nuvio.tv.data.remote.api.TmdbSearchMultiResult,
+        language: String
+    ): TrailerItem? {
+        if (title == null) return null
+        val videos = runCatching {
+            when (type) {
+                ContentType.MOVIE -> tmdbApi.getMovieVideos(tmdbId, API_KEY, language).body()?.results.orEmpty()
+                else -> tmdbApi.getTvVideos(tmdbId, API_KEY, language).body()?.results.orEmpty()
+            }
+        }.getOrDefault(emptyList())
+
+        val youtubeVideos = videos.filter { it.site == "YouTube" && it.key != null }
+
+        // Best pick: official trailer, most recently published
+        val trailer = youtubeVideos
+            .filter { it.type == "Trailer" && it.official == true }
+            .maxByOrNull { it.publishedAt.orEmpty() }
+        // Fallback: any official trailer
+            ?: youtubeVideos
+                .filter { it.type == "Trailer" }
+                .maxByOrNull { it.publishedAt.orEmpty() }
+        // Last resort: official teaser, most recent
+            ?: youtubeVideos
+                .filter { it.type == "Teaser" && it.official == true }
+                .maxByOrNull { it.publishedAt.orEmpty() }
+            ?: return null
+
+        return TrailerItem(
+            id = "tmdb:$tmdbId",
+            tmdbId = tmdbId,
+            title = title,
+            type = type,
+            backdropUrl = item.backdropPath?.let { "https://image.tmdb.org/t/p/original$it" },
+            posterUrl = item.posterPath?.let { "https://image.tmdb.org/t/p/w500$it" },
+            youtubeKey = trailer.key,
+            releaseInfo = (item.releaseDate ?: item.firstAirDate)?.take(4),
+            rating = item.voteAverage?.toFloat()
+        )
+    }
+
     suspend fun getUpcoming(language: String = "pt-BR"): List<MetaPreview> =
         getCachedOrFetch("upcoming:$language") {
             val resp = tmdbApi.getUpcomingMovies(apiKey = API_KEY, language = language).body()
             resp?.results.orEmpty().mapNotNull { mapSearchResult(it, ContentType.MOVIE) }
+        }
+
+    suspend fun getNowPlaying(language: String = "pt-BR"): List<MetaPreview> =
+        getCachedOrFetch("now_playing:$language") {
+            val resp = tmdbApi.getNowPlayingMovies(apiKey = API_KEY, language = language).body()
+            resp?.results.orEmpty().mapNotNull { mapSearchResult(it, ContentType.MOVIE) }
+        }
+
+    suspend fun getTrendingMovies(language: String = "pt-BR"): List<MetaPreview> =
+        getCachedOrFetch("trending_movies:$language") {
+            val resp = tmdbApi.getTrendingMoviesDaily(apiKey = API_KEY, language = language).body()
+            resp?.results.orEmpty().mapNotNull { mapSearchResult(it, ContentType.MOVIE) }
+        }
+
+    suspend fun getPopularSeries(language: String = "pt-BR"): List<MetaPreview> =
+        getCachedOrFetch("popular_tv:$language") {
+            val resp = tmdbApi.getPopularTv(apiKey = API_KEY, language = language).body()
+            resp?.results.orEmpty().mapNotNull { mapSearchResult(it, ContentType.SERIES) }
+        }
+
+    suspend fun getTopRatedSeries(language: String = "pt-BR"): List<MetaPreview> =
+        getCachedOrFetch("top_rated_tv:$language") {
+            val resp = tmdbApi.getTopRatedTv(apiKey = API_KEY, language = language).body()
+            resp?.results.orEmpty().mapNotNull { mapSearchResult(it, ContentType.SERIES) }
+        }
+
+    suspend fun getTrendingSeries(language: String = "pt-BR"): List<MetaPreview> =
+        getCachedOrFetch("trending_tv:$language") {
+            val resp = tmdbApi.getTrendingTvDaily(apiKey = API_KEY, language = language).body()
+            resp?.results.orEmpty().mapNotNull { mapSearchResult(it, ContentType.SERIES) }
         }
 
     suspend fun getBest90s(language: String = "pt-BR"): List<MetaPreview> =
@@ -306,7 +357,9 @@ class DiscoverService @Inject constructor(
         maxPages: Int = 5,
         fetcher: suspend (page: Int) -> com.nuvio.tv.data.remote.api.TmdbDiscoverResponse?
     ): List<MetaPreview> = withContext(Dispatchers.IO) {
-        cache[cacheKey]?.let { return@withContext it }
+        cache[cacheKey]?.let { cached ->
+            if (System.currentTimeMillis() - cached.timestamp < CACHE_TTL_MS) return@withContext cached.items
+        }
         try {
             val allItems = mutableListOf<MetaPreview>()
             for (page in 1..maxPages) {
@@ -315,7 +368,7 @@ class DiscoverService @Inject constructor(
                 allItems.addAll(items)
                 if ((resp.page) >= (resp.totalPages ?: 1)) break
             }
-            if (allItems.isNotEmpty()) cache[cacheKey] = allItems
+            if (allItems.isNotEmpty()) cache[cacheKey] = CachedList(allItems, System.currentTimeMillis())
             allItems
         } catch (e: Exception) {
             Log.e(TAG, "Failed to fetch all pages for $cacheKey: ${e.message}", e)
@@ -348,10 +401,12 @@ class DiscoverService @Inject constructor(
         key: String,
         fetch: suspend () -> List<MetaPreview>
     ): List<MetaPreview> = withContext(Dispatchers.IO) {
-        cache[key]?.let { return@withContext it }
+        cache[key]?.let { cached ->
+            if (System.currentTimeMillis() - cached.timestamp < CACHE_TTL_MS) return@withContext cached.items
+        }
         try {
             val items = fetch()
-            if (items.isNotEmpty()) cache[key] = items
+            if (items.isNotEmpty()) cache[key] = CachedList(items, System.currentTimeMillis())
             items
         } catch (e: Exception) {
             Log.e(TAG, "Failed to fetch $key: ${e.message}", e)

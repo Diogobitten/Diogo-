@@ -26,7 +26,8 @@ class DailyTipService @Inject constructor(
 
     private data class CacheEntry(
         val items: List<MetaPreview>,
-        val date: LocalDate
+        val date: LocalDate,
+        val timestampMs: Long = System.currentTimeMillis()
     )
 
     @Volatile
@@ -37,6 +38,12 @@ class DailyTipService @Inject constructor(
         val cached = cache
         if (cached != null && cached.date == today) {
             return@withContext cached.items
+        }
+
+        // Date changed — clear stale cache and fetch fresh tips
+        if (cached != null && cached.date != today) {
+            Log.d(TAG, "Day changed (${cached.date} → $today), refreshing daily tips")
+            cache = null
         }
 
         try {
